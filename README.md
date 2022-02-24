@@ -1,8 +1,12 @@
-# OrnageServer
+# OrnageServers
 
 ### 简介
 
-该项目是orangeserver v1.0的官方文档，安装，使用，部署文档将集中在此，项目的部分还在开发中，前端使用layui+jquery，后端使用flask写的纯接口，其中web终端项目使用的[webssh](https://github.com/huashengdun/webssh)开源项目修改而成。
+orangeservers是一款开源的运维管理平台（开源堡垒机）
+
+该项目是orangeserver v1.0的官方文档，安装，使用，部署文档将集中在此，项目的部分还在开发中
+
+前端使用layui+jquery，后端使用flask写的纯接口，其中web终端项目使用的[webssh](https://github.com/huashengdun/webssh)开源项目修改而成。
 
 ### 功能概述
 
@@ -64,6 +68,10 @@ REDIS_CONF = {
     'host': 'you redis ip',           # redis地址
     'port': 6379                    # redis端口号
 }
+
+# 配置python解释器路径,自行修改
+vim start.sh
+python3_path='python3'   # 修改值为解释器全路径
 
 # 启动服务，默认有两个端口 28000和8888
 chmod +x start.sh
