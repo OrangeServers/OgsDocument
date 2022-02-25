@@ -23,6 +23,7 @@ orangeservers是一款开源的运维管理平台（开源堡垒机）
 - 定时任务（可批量）
 - 文件传输（暂时只实现文件上传到后端服务器，文件上传到资产机器还在开发中）
 - 系统设置（功能较少，后续完善）
+- 下面有页面展示截图
 
 ### 部署
 
@@ -30,12 +31,18 @@ orangeservers是一款开源的运维管理平台（开源堡垒机）
 
 ```shell
 # 该项目用到了python3环境，redis，mysql，nginx，需要提前安装
-# 下载后端服务压缩包
-wget http://58.135.83.162:19612/ogsbackend/v1.0/orangeservers_v1.0.tar.gz
+# 克隆OgsBackend安装包
+git clone https://github.com/OrangeServers/OgsBackend.git
+# 改名
+mv OgsBackend orangeservers
+
+# 克隆OgsSsh安装包
+git clone https://github.com/OrangeServers/OgsSsh.git
+# 将目录移动到orangeservers内
+mv OgsSsh orangeservers/ogsssh
 
 # 解压orangeserver压缩包，导入数据文件
-tar -xf orangeservers_v1.0.tar.gz && cd orangeservers
-# 安装依赖库
+&& cd orangeservers
 pip3 install -r requirements.txt
 # 你的数据库地址用户名和密码
 mysql -uxxx -pxxx -hx.x.x.x
@@ -44,8 +51,8 @@ mysql> create database orange;
 mysql -uxxx -pxxx -hx.x.x.x orange < mysqldir/orange.sql
 
 # 修改后端配置文件
-cp app/conf/conf_test_exapmple.py app/conf/conf_test.py
-vim app/conf/conf_test.py
+cp app/conf/conf_exapmple.py app/conf/conf.py
+vim app/conf/conf.py
 # 一般只需要修改这三处即可
 # 邮件配置
 MAIL_CONF = {
