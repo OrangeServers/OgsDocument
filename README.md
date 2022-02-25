@@ -27,17 +27,23 @@ orangeservers是一款开源的运维管理平台（开源堡垒机）
 
 ### 部署
 
+查看不了图片或者克隆慢可以去gitee的仓库，[这是地址](https://gitee.com/xuwei777/OgsDocument)
+
 ##### [后端服务](https://github.com/OrangeServers/OgsBackend)
 
 ```shell
 # 该项目用到了python3环境，redis，mysql，nginx，需要提前安装
-# 克隆OgsBackend安装包
+# 克隆OgsBackend安装包 国内环境克隆慢可以去gitee克隆
 git clone https://github.com/OrangeServers/OgsBackend.git
+
+# 也可以直接下载安装压缩包 wget http://download.stisd.cn/ogsbackend/OgsBackend_v1.0.tar.gz
 # 改名
 mv OgsBackend orangeservers
 
 # 克隆OgsSsh安装包
 git clone https://github.com/OrangeServers/OgsSsh.git
+
+# 也可以直接下载安装压缩包 wget http://download.stisd.cn/ogsssh/OgsSsh_v1.0.tar.gz
 # 将目录移动到orangeservers内
 mv OgsSsh orangeservers/ogsssh
 
@@ -88,8 +94,11 @@ chmod +x start.sh
 ##### [前端服务](https://github.com/OrangeServers/OgsFront)
 
 ```shell
-# 克隆前端项目
+# 克隆前端项目 国内环境克隆慢可以去gitee克隆
 git clone https://github.com/OrangeServers/OgsFront.git
+# 也可以直接下载安装压缩包 wget http://download.stisd.cn/ogsfront/OgsFront_v1.0.tar.gz
+
+# 改名
 mv OgsFront ogsfront
 
 # 配置nginx配置文件，示例 orangeserver.conf
