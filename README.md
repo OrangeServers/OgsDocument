@@ -88,11 +88,9 @@ chmod +x start.sh
 ##### [前端服务](https://github.com/OrangeServers/OgsFront)
 
 ```shell
-# 下载前端服务压缩包
-wget http://58.135.83.162:19612/ogsfront/v1.0/orangefront_v1.0.tar.gz
-
-# 解压压缩包
-tar -xf orangefront_v1.0.tar.gz
+# 克隆前端项目
+git clone https://github.com/OrangeServers/OgsFront.git
+mv OgsFront ogsfront
 
 # 配置nginx配置文件，示例 orangeserver.conf
 server {
