@@ -27,11 +27,11 @@ orangeservers是一款开源的运维管理平台（开源堡垒机）
 
 ### 部署
 
-查看不了图片或者克隆慢可以去gitee的仓库，[这是地址](https://gitee.com/xuwei777/OgsDocument)
+查看不了图片或者克隆慢可以去gitee的仓库，[这是地址](https://gitee.com/orangeservers/OgsDocument)
 
-##### [后端服务](https://github.com/OrangeServers/OgsBackend)     [gitee地址](https://gitee.com/xuwei777/OgsBackend)
+##### [后端服务](https://github.com/OrangeServers/OgsBackend)     [gitee地址](https://gitee.com/orangeservers/OgsBackend)
 
-##### [web终端服务](https://github.com/OrangeServers/OgsSsh)        [gitee地址](https://gitee.com/xuwei777/OgsSsh)
+##### [web终端服务](https://github.com/OrangeServers/OgsSsh)        [gitee地址](https://gitee.com/orangeservers/OgsSsh)
 
 ```shell
 # 该项目用到了python3环境，redis，mysql，nginx，需要提前安装
@@ -93,7 +93,7 @@ chmod +x start.sh
 ./start start
 ```
 
-##### [前端服务](https://github.com/OrangeServers/OgsFront)     [gitee地址](https://gitee.com/xuwei777/OgsFront)
+##### [前端服务](https://github.com/OrangeServers/OgsFront)     [gitee地址](https://gitee.com/orangeservers/OgsFront)
 
 ```shell
 # 克隆前端项目 国内环境克隆慢可以去gitee克隆
