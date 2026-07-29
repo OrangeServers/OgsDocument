@@ -8,6 +8,22 @@ OrangeServer 提供三条经过验证的部署路径，全部经过部署审计�
 一条命令启动四个容器（nginx、前端、后端、MySQL/Redis），
 即[快速开始](/zh/guide/getting-started)描述的路径。
 
+全新安装可直接运行稳定 GitHub Release 中固定版本的薄引导器：
+
+```bash
+curl -fsSL \
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.0
+```
+
+引导器会下载并校验同版本部署包，生成 MySQL 与 Redis 基础设施密码，
+并启动已发布的
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.0` 镜像。
+管理员、SMTP、AI 服务商等应用配置仍在浏览器 `/setup` 向导中完成。
+如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
+
+源码检出或已有安装仍可使用仓库目标：
+
 ```bash
 make docker-up        # bundled 模式：全容器
 make docker-up-host   # host 模式：复用宿主机已有 MySQL/Redis
