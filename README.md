@@ -94,14 +94,15 @@ Requirements: Docker Engine with Docker Compose v2, `curl`, `make`, `openssl`,
 through `sudo`).
 
 ```bash
+set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.1
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.2
 ```
 
 This version-pinned launcher downloads and verifies the matching deployment
 bundle, generates the MySQL and Redis infrastructure passwords, and starts the
-published `ghcr.io/orangeservers/orangeserver-backend:v1.0.1` image. Review the
+published `ghcr.io/orangeservers/orangeserver-backend:v1.0.2` image. Review the
 launcher first if your environment does not permit piping downloaded scripts to
 a shell.
 

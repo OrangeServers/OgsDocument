@@ -106,7 +106,9 @@ try {
 $launcherEntrypoints = @(
     'README.md',
     'README.zh-CN.md',
+    'website/guide/deployment.md',
     'website/guide/getting-started.md',
+    'website/zh/guide/deployment.md',
     'website/zh/guide/getting-started.md',
     'website/.vitepress/theme/components/HomeCta.vue',
     'website/.vitepress/theme/components/HeroExtras.vue'
@@ -118,6 +120,9 @@ foreach ($relativePath in $launcherEntrypoints) {
     }
     if ($content -match 'git clone[^\r\n]*OrangeServer') {
         $errors.Add("$relativePath`: stale source-build primary entrypoint")
+    }
+    if ($content -notmatch 'set -o pipefail') {
+        $errors.Add("$relativePath`: launcher pipeline can hide curl failures")
     }
     $releaseVersion = [regex]::Match(
         $content,

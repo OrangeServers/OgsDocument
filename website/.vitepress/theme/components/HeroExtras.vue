@@ -7,7 +7,7 @@ const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
 const cmd =
-  'curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1'
+  'set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh | sudo bash -s -- --version v1.0.2'
 
 async function copy() {
   try {
@@ -47,7 +47,7 @@ async function copy() {
       </a>
     </div>
     <div class="install">
-      <pre><span class="ps">$</span> curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1</pre>
+      <pre><span class="ps">$</span> set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh | sudo bash -s -- --version v1.0.2</pre>
       <button
         class="copy"
         :class="{ ok: copied }"
