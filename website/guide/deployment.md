@@ -14,13 +14,13 @@ GitHub Release:
 
 ```bash
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.0
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.1
 ```
 
 The launcher downloads and verifies the matching deployment bundle, generates
 the MySQL and Redis infrastructure passwords, and starts the published
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.0` image. Application
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.1` image. Application
 settings—including the administrator, SMTP, and AI providers—remain in the
 browser-based `/setup` wizard. Review the launcher first if your environment
 does not permit piping downloaded scripts to a shell.

@@ -7,7 +7,7 @@ const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
 const cmd =
-  'curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh | sudo bash -s -- --version v1.0.0'
+  'curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1'
 
 async function copy() {
   try {
@@ -53,7 +53,7 @@ onMounted(() => {
         }}
       </p>
       <div class="cta-cmd">
-        <pre><span class="ps">$</span> curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh | sudo bash -s -- --version v1.0.0</pre>
+        <pre><span class="ps">$</span> curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1</pre>
         <button class="copy-btn" :class="{ ok: copied }" @click="copy">
           {{ copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy' }}
         </button>

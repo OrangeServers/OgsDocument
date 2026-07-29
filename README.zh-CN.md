@@ -93,13 +93,13 @@ Run 的证据 ID。需要改变主机状态的修复仍必须生成独立审批�
 
 ```bash
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.0
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.1
 ```
 
 这个固定版本的薄引导器会下载并校验同版本部署包，生成 MySQL 与 Redis
 基础设施密码，并启动已发布的
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.0` 镜像。
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.1` 镜像。
 如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
 
 浏览器打开 `http://<服务器地址>:8080`。应用未配置时会进入 `/setup`，请使用
