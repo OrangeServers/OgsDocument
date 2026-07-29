@@ -4,13 +4,14 @@
 `curl` 与可使用 `sudo` 的权限。
 
 ```bash
+set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.1
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.2
 ```
 
 引导器会下载并校验同版本部署包，生成 MySQL 与 Redis 基础设施密码，并启动已发布的
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.1` 镜像。若环境不允许将下载内容
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.2` 镜像。若环境不允许将下载内容
 直接交给 shell，请先下载并审阅引导器。源码部署和复用宿主机服务的部署方式见
 [部署方式](/zh/guide/deployment)。
 

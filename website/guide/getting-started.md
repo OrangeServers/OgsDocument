@@ -4,14 +4,15 @@ The recommended path is the version-pinned Docker Compose launcher. It requires
 Docker Engine with Docker Compose v2, `curl`, and `sudo` access.
 
 ```bash
+set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.1
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.2
 ```
 
 The launcher downloads and verifies the matching deployment bundle, generates
 the MySQL and Redis infrastructure passwords, and starts the published
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.1` image. If your environment
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.2` image. If your environment
 does not permit piping a downloaded script to a shell, download and review the
 launcher first. For source-based and host deployments, see
 [Deployment options](/guide/deployment).
