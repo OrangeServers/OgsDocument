@@ -8,8 +8,9 @@
   </p>
   <p>
     <a href="README.md">English</a> ·
-    <a href="docs/README.md">文档中心</a> ·
-    <a href="DEPLOY.md">部署</a> ·
+    <a href="https://orangeservers.github.io/OrangeServer/zh/">项目官网</a> ·
+    <a href="https://orangeservers.github.io/OrangeServer/zh/guide/deployment.html">部署</a> ·
+    <a href="docs/README.md">仓库文档</a> ·
     <a href="SECURITY.md">安全</a>
   </p>
   <p>
@@ -86,25 +87,23 @@ Run 的证据 ID。需要改变主机状态的修复仍必须生成独立审批�
 
 ## 快速开始
 
-要求：Docker Engine、Docker Compose v2、Git 和 Make。
+要求：Docker Engine、Docker Compose v2 和 `curl`。
 
 ```bash
-git clone https://github.com/OrangeServers/OrangeServer.git
-cd OrangeServer
-cp .env.example .env
-cp backend/.env.example backend/.env
+curl -fsSL \
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.0
 ```
 
-bundled 模式必须先在根 `.env` 设置 MySQL/Redis 容器初始化密码。后端应用密钥
-可以在 `backend/.env` 中留空，由首次部署向导 `/setup` 安全生成，然后启动：
-
-```bash
-make docker-up
-```
+这个固定版本的薄引导器会下载并校验同版本部署包，生成 MySQL 与 Redis
+基础设施密码，并启动已发布的
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.0` 镜像。
+如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
 
 浏览器打开 `http://<服务器地址>:8080`。应用未配置时会进入 `/setup`，请使用
 向导创建的管理员登录；仅跳过向导并保留基线种子时才存在 `admin/admin`，必须
-立即修改。首次后端冷构建通常约 3–5 分钟，后续可复用 Docker 缓存。
+立即修改。源码检出、复用宿主机数据库和物理机部署仍见
+[部署手册](DEPLOY.md)。
 
 > 升级已有实例时，不要只执行 `git pull`。先备份，再按
 > [统一升级流程](docs/operations/UPGRADE.md) 顺序执行数据库迁移和验证。
@@ -135,6 +134,8 @@ flowchart LR
 
 ## 文档入口
 
+- [项目官网](https://orangeservers.github.io/OrangeServer/zh/)
+- [官网部署指南](https://orangeservers.github.io/OrangeServer/zh/guide/deployment.html)
 - [文档中心](docs/README.md)
 - [部署手册](DEPLOY.md)
 - [统一升级流程](docs/operations/UPGRADE.md)

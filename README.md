@@ -8,8 +8,9 @@
   </p>
   <p>
     <a href="README.zh-CN.md">简体中文</a> ·
-    <a href="docs/README.md">Documentation</a> ·
-    <a href="DEPLOY.md">Deployment</a> ·
+    <a href="https://orangeservers.github.io/OrangeServer/">Website</a> ·
+    <a href="https://orangeservers.github.io/OrangeServer/guide/deployment.html">Deployment</a> ·
+    <a href="docs/README.md">Repository docs</a> ·
     <a href="SECURITY.md">Security</a>
   </p>
   <p>
@@ -88,28 +89,25 @@ host state still requires a separate approval-gated action. See
 
 ## Quick start
 
-Requirements: Docker Engine with Docker Compose v2, Git, and Make.
+Requirements: Docker Engine with Docker Compose v2 and `curl`.
 
 ```bash
-git clone https://github.com/OrangeServers/OrangeServer.git
-cd OrangeServer
-cp .env.example .env
-cp backend/.env.example backend/.env
+curl -fsSL \
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.0
 ```
 
-In bundled mode, first set the MySQL and Redis container bootstrap passwords in
-the root `.env`. Backend application secrets may remain empty and be generated
-securely by the first-run `/setup` wizard. Then start the stack:
-
-```bash
-make docker-up
-```
+This version-pinned launcher downloads and verifies the matching deployment
+bundle, generates the MySQL and Redis infrastructure passwords, and starts the
+published `ghcr.io/orangeservers/orangeserver-backend:v1.0.0` image. Review the
+launcher first if your environment does not permit piping downloaded scripts to
+a shell.
 
 Open `http://<server>:8080`. If setup is pending, complete `/setup` and sign in
 with the administrator created by the wizard. `admin` / `admin` exists only
 when the wizard is bypassed and the baseline seed is retained; change it
-immediately. The first backend build typically takes 3–5 minutes, while later
-builds reuse the Docker cache.
+immediately. Source checkout, host-database, and physical-machine paths remain
+available in the [deployment guide](DEPLOY.md).
 
 > When upgrading an existing instance, do not just `git pull`. Back up first,
 > then run database migrations and verification in order following the
@@ -144,6 +142,8 @@ flowchart LR
 
 ## Documentation
 
+- [Project website](https://orangeservers.github.io/OrangeServer/)
+- [Website deployment guide](https://orangeservers.github.io/OrangeServer/guide/deployment.html)
 - [Documentation index](docs/README.md)
 - [Deployment guide](DEPLOY.md)
 - [Upgrade procedure](docs/operations/UPGRADE.md)
