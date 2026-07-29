@@ -1,0 +1,57 @@
+import type zh from '../zh-CN/ssh'
+
+export default {
+  session: {
+    title: 'Remote session',
+    terminalTab: 'Terminal',
+    sftpTab: 'File transfer',
+    pool: 'Sessions {n}',
+    backHome: 'Back to main panel',
+    createTabFail: 'Failed to create terminal tab: {msg}',
+    unknownError: 'Unknown error',
+  },
+  tree: {
+    selectAsset: 'Select asset',
+    sysCred: 'System credential',
+    selectUser: 'Select user',
+    searchPlaceholder: 'Search assets... (right-click a host for more actions)',
+  },
+  term: {
+    title: 'Terminal sessions',
+    duplicateTooltip: 'Duplicate current connection (new session)',
+    duplicate: 'Duplicate',
+    closeOthersTooltip: 'Close other sessions',
+    closeTab: 'Close',
+    emptySteps: {
+      one: 'Pick a system credential',
+      two: 'Click / right-click a host in the asset tree',
+      three: 'An SSH terminal opens automatically (multi-tab)',
+    },
+  },
+  ctx: {
+    connect: 'Connect terminal',
+    sftpOnly: 'Open SFTP only',
+    duplicateNew: 'Duplicate connection (new session)',
+    copyName: 'Copy hostname',
+    copySsh: 'Copy SSH command',
+    detail: 'Asset details',
+    activate: 'Switch to this session',
+    duplicate: 'Duplicate connection',
+    close: 'Close current',
+    closeOthers: 'Close others',
+    closeAll: 'Close all',
+  },
+  msg: {
+    selectCredFirst: 'Select a system credential first',
+    selectUserFirst: 'Select a system user first',
+    noActiveSession: 'No active session',
+    duplicated: 'Duplicated: {target}',
+    closedOthers: 'Closed other sessions',
+    closedAll: 'Closed all sessions',
+    popupBlocked: 'The browser blocked the popup, allow it and retry',
+    sftpOpened: 'Opened standalone SFTP window: {target}',
+    copiedHost: 'Copied hostname: {name}',
+    copiedSsh: 'Copied SSH command: {cmd}',
+    copyFail: 'Copy failed',
+  },
+} satisfies typeof zh

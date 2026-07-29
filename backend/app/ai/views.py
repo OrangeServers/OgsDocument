@@ -1,0 +1,736 @@
+"""HTTP views for provider settings, conversations, Agent SSE and approvals."""
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
+
+from flask import Response, current_app, request, stream_with_context
+from sqlalchemy import func
+
+from app.ai.actions import ActionService, ActionValidationError
+from app.ai.provider_config import ProviderConfigError, ProviderConfigService
+from app.ai.runner import AgentRunner, sse_event
+from app.ai.storage import (
+    AgentStore,
+    AgentStoreConflict,
+    AgentStoreError,
+    AgentStoreNotFound,
+)
+from app.core.db.database import db, t_command_log
+from app.tools.apierr import ApiCode, api_error, api_response
+from app.tools.at import get_current_user, get_current_user_role
+
+
+logger = logging.getLogger(__name__)
+
+
+def _identity():
+    redis_holder, owner = get_current_user()
+    return redis_holder, owner, str(get_current_user_role() or "")
+
+
+def _payload() -> Dict[str, Any]:
+    value = request.get_json(silent=True)
+    if isinstance(value, dict):
+        return value
+    return request.form.to_dict(flat=True)
+
+
+def _ok(**data):
+    response, _status = api_response(**data)
+    return response
+
+
+def _error(message: str, status: int = 400):
+    code = ApiCode.INTERNAL_ERROR if status >= 500 else ApiCode.TYPE_ERROR
+    return api_error(code, message, status=status)
+
+
+def _iso(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return datetime.fromtimestamp(float(value), timezone.utc).isoformat()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _conversation_summary(row):
+    return {
+        **row,
+        "created_at": _iso(row.get("created_at")),
+        "updated_at": _iso(row.get("updated_at")),
+    }
+
+
+def _project_tool_events(events):
+    projected: Dict[str, Dict[str, Any]] = {}
+    order = []
+    for index, event in enumerate(events or []):
+        if event.get("type") not in ("tool.started", "tool.completed"):
+            continue
+        event_id = str(event.get("tool_call_id") or event.get("id") or "")
+        key = event_id or f"event:{index}"
+        current = {
+            **event,
+            "created_at": _iso(event.get("created_at")),
+        }
+        existing = projected.get(key)
+        if existing is None:
+            projected[key] = current
+            order.append(key)
+            continue
+        if (
+            existing.get("type") == "tool.completed"
+            and current.get("type") == "tool.started"
+        ):
+            continue
+        started_at = existing.get("created_at")
+        projected[key] = {
+            **existing,
+            **current,
+            "created_at": started_at or current.get("created_at"),
+        }
+    return [projected[key] for key in order]
+
+
+def _project_execution_items(items, *, max_output_chars: int = 8192):
+    """Return the UI execution contract without host IDs/IPs or unbounded output."""
+    projected = []
+    limit = max(0, int(max_output_chars))
+    for item in items or []:
+        alias = str(item.get("host") or item.get("alias") or "")
+        output = str(item.get("output") or "")
+        error = str(item.get("error") or "")
+        row = {
+            "host": alias,
+            "alias": alias,
+            "status": item.get("status"),
+            "output": output[:limit],
+            "error": error[:2048],
+        }
+        if item.get("truncated") or len(output) > limit:
+            row["truncated"] = True
+        projected.append(row)
+    return projected
+
+
+def _project_provider_observability(state):
+    source = (state or {}).get("provider_observability") or {}
+    usage_source = source.get("usage") or {}
+    usage = {
+        key: max(0, int(usage_source.get(key) or 0))
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+        if usage_source.get(key) is not None
+    }
+    budget_source = source.get("context_budget") or {}
+    budget = {
+        key: max(0, int(budget_source.get(key) or 0))
+        for key in (
+            "context_window_tokens",
+            "output_reserve_tokens",
+            "safety_reserve_tokens",
+            "runtime_reserve_tokens",
+            "effective_input_tokens",
+            "estimated_input_tokens",
+        )
+        if budget_source.get(key) is not None
+    }
+    result = {
+        "usage": usage,
+        "last_finish_reason": str(
+            source.get("last_finish_reason") or "unknown"
+        )[:32],
+        "last_latency_ms": max(
+            0, int(source.get("last_latency_ms") or 0)
+        ),
+        "compression_count": max(
+            0, int(source.get("compression_count") or 0)
+        ),
+        "context_budget": budget,
+    }
+    if source.get("truncation_reason"):
+        result["truncation_reason"] = str(
+            source["truncation_reason"]
+        )[:32]
+    compression = source.get("last_compression")
+    if isinstance(compression, dict):
+        compression_usage = compression.get("usage") or {}
+        result["last_compression"] = {
+            "usage": {
+                key: max(0, int(compression_usage.get(key) or 0))
+                for key in (
+                    "prompt_tokens", "completion_tokens", "total_tokens"
+                )
+                if compression_usage.get(key) is not None
+            },
+            "finish_reason": str(
+                compression.get("finish_reason") or "unknown"
+            )[:32],
+            "latency_ms": max(
+                0, int(compression.get("latency_ms") or 0)
+            ),
+            "truncated": bool(compression.get("truncated")),
+        }
+    return result
+
+
+def _store() -> AgentStore:
+    redis_holder, _owner, _role = _identity()
+    return AgentStore(redis_holder.conn)
+
+
+def _diagnostic_service():
+    from app.ai.diagnostics import DiagnosticService
+
+    return DiagnosticService(agent_store=_store())
+
+
+def diagnostic_profiles():
+    from app.ai.diagnostic_profiles import list_profiles
+
+    profiles = list_profiles()
+    return _ok(profiles=profiles, data=profiles)
+
+
+def create_diagnostic():
+    from app.ai.diagnostics import (
+        DiagnosticError,
+        DiagnosticValidationError,
+    )
+
+    _holder, owner, role = _identity()
+    try:
+        run = _diagnostic_service().start(
+            owner=owner, role=role, payload=_payload()
+        )
+        return _ok(run=run, data=run)
+    except DiagnosticValidationError as exc:
+        db.session.rollback()
+        return _error(str(exc))
+    except DiagnosticError as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        logger.exception("AI diagnostic failed")
+        return _error("诊断执行失败，请查看服务端日志", 500)
+
+
+def diagnostic_detail(run_id: str):
+    from app.ai.diagnostics import DiagnosticNotFound
+
+    _holder, owner, role = _identity()
+    try:
+        service = _diagnostic_service()
+        run = service.get_run(owner, run_id, role)
+        try:
+            after_seq = max(0, int(request.args.get("after_seq", 0)))
+        except (TypeError, ValueError):
+            return _error("after_seq 参数无效")
+        events = service.events(owner, run_id, after_seq, role)
+        return _ok(run=run, events=events, data=run)
+    except DiagnosticNotFound as exc:
+        return _error(str(exc), 404)
+
+
+def cancel_diagnostic(run_id: str):
+    from app.ai.diagnostics import DiagnosticNotFound
+
+    _holder, owner, role = _identity()
+    try:
+        run = _diagnostic_service().cancel(owner, run_id, role)
+        return _ok(run=run, data=run)
+    except DiagnosticNotFound as exc:
+        return _error(str(exc), 404)
+
+
+def diagnostic_evidence(run_id: str):
+    from app.ai.diagnostics import DiagnosticNotFound
+
+    _holder, owner, role = _identity()
+    try:
+        items = _diagnostic_service().evidence(owner, run_id, role)
+        data = {"items": items, "total": len(items)}
+        return _ok(**data, data=data)
+    except DiagnosticNotFound as exc:
+        return _error(str(exc), 404)
+
+
+def diagnostic_report(run_id: str):
+    from app.ai.diagnostics import DiagnosticNotFound
+
+    _holder, owner, role = _identity()
+    try:
+        report = _diagnostic_service().report(owner, run_id, role)
+        return _ok(report=report, data=report)
+    except DiagnosticNotFound as exc:
+        return _error(str(exc), 404)
+
+
+def ai_stats():
+    """仪表盘用 AI 运维统计：近 N 天 AI 发起的批量执行按天台次（成功/失败）。
+
+    数据源为 t_command_log 中 log_type='AI 批量命令' 的逐台审计行
+    （AI Agent 的受控批量命令与只读诊断都会以该类型落审计）。
+    """
+    try:
+        days = min(max(int(request.args.get("days", 7)), 1), 30)
+    except (TypeError, ValueError):
+        days = 7
+    start = (datetime.now() - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+    try:
+        rows = (
+            t_command_log.query
+            .filter(t_command_log.log_type == "AI 批量命令")
+            .filter(t_command_log.log_time >= start)
+            .with_entities(
+                func.date(t_command_log.log_time).label("day"),
+                t_command_log.log_status,
+                func.count(t_command_log.id).label("cnt"),
+            )
+            .group_by(func.date(t_command_log.log_time), t_command_log.log_status)
+            .all()
+        )
+    except Exception:
+        logger.exception("AI stats query failed")
+        return _error("统计查询失败", 500)
+    full_keys = [
+        (start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)
+    ]
+    success = {key: 0 for key in full_keys}
+    failed = {key: 0 for key in full_keys}
+    for day, status, cnt in rows:
+        key = str(day)[:10]
+        if key not in success:
+            continue
+        if str(status) == "成功":
+            success[key] += int(cnt)
+        else:
+            failed[key] += int(cnt)
+    total_success = sum(success.values())
+    total_failed = sum(failed.values())
+    return _ok(
+        days=[key[5:] for key in full_keys],
+        success=[success[key] for key in full_keys],
+        failed=[failed[key] for key in full_keys],
+        total=total_success + total_failed,
+        total_success=total_success,
+        total_failed=total_failed,
+    )
+
+
+def public_providers():
+    data = ProviderConfigService().public_rows()
+    return _ok(**data, data=data)
+
+
+def admin_providers():
+    rows = ProviderConfigService().admin_rows()
+    return _ok(providers=rows, data=rows)
+
+
+def save_provider(code: str):
+    try:
+        row = ProviderConfigService().save(code, _payload())
+        return _ok(provider=row, data=row)
+    except ProviderConfigError as exc:
+        db.session.rollback()
+        return _error(str(exc))
+
+
+def test_provider(code: str):
+    try:
+        result = ProviderConfigService().test(code)
+        return _ok(result=result, data=result)
+    except ProviderConfigError as exc:
+        db.session.rollback()
+        return _error(str(exc))
+    except Exception:
+        logger.exception("AI provider connection test failed: code=%s", code)
+        return _error("连接测试失败，请查看服务端日志", 502)
+
+
+def provider_models(code: str):
+    try:
+        result = ProviderConfigService().discover_models(code)
+        return _ok(result=result, data=result)
+    except ProviderConfigError as exc:
+        db.session.rollback()
+        return _error(str(exc))
+    except Exception:
+        logger.exception("AI provider model discovery failed: code=%s", code)
+        return _error("模型列表获取失败，请查看服务端日志", 502)
+
+
+def clear_provider_key(code: str):
+    try:
+        row = ProviderConfigService().clear_key(code)
+        return _ok(provider=row, data=row)
+    except ProviderConfigError as exc:
+        return _error(str(exc), 404)
+
+
+def conversations():
+    _holder, owner, _role = _identity()
+    rows = [
+        _conversation_summary(row)
+        for row in _store().list_conversations(owner)
+    ]
+    return _ok(conversations=rows, data=rows)
+
+
+def create_conversation():
+    _holder, owner, _role = _identity()
+    payload = _payload()
+    providers = ProviderConfigService()
+    try:
+        row = providers.configured_row(str(payload.get("provider_code") or "") or None)
+        context_mode = providers.context_mode(row, payload.get("context_mode"))
+        conversation = _store().create_conversation(
+            owner,
+            row.provider_code,
+            row.model,
+            context_mode=context_mode,
+        )
+        conversation = _conversation_summary(conversation)
+        return _ok(conversation=conversation, data=conversation)
+    except ProviderConfigError as exc:
+        return _error(str(exc))
+
+
+def conversation_detail(conversation_id: str):
+    _holder, owner, role = _identity()
+    store = _store()
+    action_summary_only = request.args.get("action_summary") == "1"
+    try:
+        conversation = store.get_conversation(owner, conversation_id)
+        try:
+            diagnostic_runs = _diagnostic_service().conversation_runs(
+                owner, conversation_id, limit=5, role=role
+            )
+        except Exception:
+            # Deployments must apply rev50 before diagnostics become available;
+            # existing conversation history remains readable during rollout.
+            diagnostic_runs = []
+        active_diagnostic = next(
+            (
+                run for run in diagnostic_runs
+                if run.get("status") in ("queued", "running")
+            ),
+            None,
+        )
+        latest_diagnostic = diagnostic_runs[0] if diagnostic_runs else None
+        actions = []
+        action_ids = conversation.get(
+            "action_ids",
+            conversation.get("pending_action_ids", []),
+        )
+        if action_summary_only:
+            action_ids = action_ids[-5:]
+        for action_id in action_ids:
+            try:
+                actions.append(store.get_action(owner, action_id))
+            except AgentStoreNotFound:
+                continue
+        pending_action = next(
+            (action for action in reversed(actions) if action.get("status") == "pending"),
+            None,
+        )
+        latest_action = actions[-1] if actions else None
+
+        def project_action(action):
+            if not action:
+                return None
+            result = action.get("result") or {}
+            try:
+                action_result_set = store.get_result_set(
+                    owner, action["result_set_id"]
+                )
+                target_count = len(action_result_set.get("resource_ids") or [])
+            except AgentStoreNotFound:
+                target_count = int(result.get("total") or 0)
+            outcome = result.get("outcome")
+            if not outcome and action.get("status") == "completed":
+                success = int(result.get("success") or 0)
+                failed = int(result.get("failed") or 0)
+                outcome = (
+                    "success" if failed == 0
+                    else "failed" if success == 0
+                    else "partial"
+                )
+            return {
+                "action_id": action.get("id"),
+                "conversation_id": action.get("conversation_id"),
+                "command": action.get("command"),
+                "sys_user": action.get("sys_user"),
+                "target_count": target_count,
+                "reason": action.get("reason"),
+                "risk_level": "medium",
+                "status": action.get("status"),
+                "outcome": outcome,
+                "result_summary": {
+                    key: result.get(key)
+                    for key in ("total", "success", "failed", "status", "outcome")
+                    if result.get(key) is not None
+                },
+                "created_at": _iso(action.get("created_at")),
+                "updated_at": _iso(action.get("updated_at")),
+                "expires_at": _iso(action.get("expires_at")),
+            }
+
+        latest_result = (latest_action or {}).get("result") or {}
+        action_history = []
+        for action in actions[-5:]:
+            projected = project_action(action)
+            if not projected:
+                continue
+            history_entry = {"action": projected}
+            if not action_summary_only:
+                action_result = action.get("result") or {}
+                history_entry["execution_items"] = _project_execution_items(
+                    action_result.get("items")
+                )
+            action_history.append(history_entry)
+        if action_summary_only:
+            detail = {
+                "id": conversation.get("id"),
+                "has_pending_action": pending_action is not None,
+                "pending_action": project_action(pending_action),
+                "latest_action": project_action(latest_action),
+                "action_history": action_history,
+            }
+            return _ok(conversation=detail, data=detail)
+
+        result_scope = None
+        result_id = (conversation.get("state") or {}).get("last_result_set_id")
+        if result_id:
+            try:
+                result = store.get_result_set(owner, result_id)
+                result_scope = {
+                    "result_set_id": result["id"],
+                    "kind": result["kind"],
+                    "total": len(result.get("rows") or []),
+                    **(result.get("summary") or {}),
+                    "sample": (result.get("rows") or [])[:10],
+                }
+            except AgentStoreNotFound:
+                pass
+        display_messages = []
+        for message in conversation.get("messages") or []:
+            if message.get("role") not in ("user", "assistant"):
+                continue
+            if not str(message.get("content") or "").strip():
+                continue
+            display_messages.append({
+                "id": message.get("id"),
+                "role": message.get("role"),
+                "content": message.get("content"),
+                "created_at": _iso(message.get("created_at")),
+            })
+        display_events = _project_tool_events(conversation.get("events"))
+        detail = {
+            "id": conversation.get("id"),
+            "title": conversation.get("title"),
+            "provider_code": conversation.get("provider_code"),
+            "model": conversation.get("model"),
+            "context_mode": conversation.get("context_mode"),
+            "created_at": _iso(conversation.get("created_at")),
+            "updated_at": _iso(conversation.get("updated_at")),
+            "has_pending_action": pending_action is not None,
+            "messages": display_messages,
+            "tool_events": display_events,
+            "pending_action": project_action(pending_action),
+            "latest_action": project_action(latest_action),
+            "action_history": action_history,
+            "result_scope": result_scope,
+            "execution_items": _project_execution_items(
+                latest_result.get("items")
+            ),
+            "diagnostics": diagnostic_runs,
+            "active_diagnostic": active_diagnostic,
+            "latest_diagnostic": latest_diagnostic,
+            "provider_observability": _project_provider_observability(
+                conversation.get("state")
+            ),
+        }
+        return _ok(conversation=detail, data=detail)
+    except AgentStoreNotFound as exc:
+        return _error(str(exc), 404)
+
+
+def delete_conversation(conversation_id: str):
+    _holder, owner, _role = _identity()
+    try:
+        _store().delete_conversation(owner, conversation_id)
+        return _ok(deleted=True)
+    except AgentStoreNotFound as exc:
+        return _error(str(exc), 404)
+    except AgentStoreConflict as exc:
+        return _error(str(exc), 409)
+
+
+def result_set_detail(result_set_id: str):
+    _holder, owner, _role = _identity()
+    try:
+        result = _store().get_result_set(owner, result_set_id)
+    except AgentStoreNotFound as exc:
+        return _error(str(exc), 404)
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        page_size = min(100, max(1, int(request.args.get("page_size", 20))))
+    except (TypeError, ValueError):
+        return _error("分页参数无效")
+    rows = result.get("rows") or []
+    start = (page - 1) * page_size
+    data = {
+        "id": result["id"],
+        "kind": result["kind"],
+        "summary": result.get("summary") or {},
+        "filters": result.get("filters") or {},
+        "rows": rows[start:start + page_size],
+        "page": page,
+        "page_size": page_size,
+        "total": len(rows),
+    }
+    return _ok(result=data, data=data)
+
+
+def chat():
+    _holder, owner, role = _identity()
+    payload = _payload()
+    conversation_id = str(payload.get("conversation_id") or "").strip()
+    message = str(payload.get("message") or "").strip()
+    app = current_app._get_current_object()
+    generator = AgentRunner(
+        store=_store(),
+        worker_context_factory=app.app_context,
+    ).run(
+        owner=owner,
+        role=role,
+        conversation_id=conversation_id,
+        message=message,
+    )
+    return Response(
+        stream_with_context(generator),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+def approve_action(action_id: str):
+    _holder, owner, role = _identity()
+    store = _store()
+    app = current_app._get_current_object()
+    remote_ip = request.remote_addr or ""
+    user_agent = request.headers.get("User-Agent", "")
+
+    def generate():
+        from gevent import spawn
+        from gevent.queue import Queue
+
+        queue = Queue()
+        done = object()
+
+        def worker():
+            with app.app_context():
+                try:
+                    service = ActionService(store=store)
+                    action = service.approve(
+                        owner,
+                        role,
+                        action_id,
+                        remote_ip=remote_ip,
+                        user_agent=user_agent,
+                        on_progress=lambda item: queue.put(("progress", item)),
+                    )
+                    queue.put(("completed", action))
+                except ActionValidationError as exc:
+                    queue.put(("failed", str(exc)[:240]))
+                except Exception:
+                    logger.exception(
+                        "AI action approval failed: action_id=%s",
+                        action_id,
+                    )
+                    queue.put(("failed", "批量命令执行失败，请查看服务端日志"))
+                finally:
+                    queue.put(("done", done))
+
+        spawn(worker)
+        while True:
+            event_name, value = queue.get()
+            if event_name == "progress":
+                yield sse_event(
+                    "action.progress",
+                    action_id=action_id,
+                    item=value,
+                    host=value.get("alias"),
+                    alias=value.get("alias"),
+                    status=value.get("status"),
+                    output=value.get("output"),
+                    error=value.get("error"),
+                )
+            elif event_name == "completed":
+                conversation_id = value.get("conversation_id")
+                execution_result = value.get("result") or {}
+                result_summary = {
+                    key: execution_result.get(key)
+                    for key in ("total", "success", "failed", "status", "outcome")
+                    if execution_result.get(key) is not None
+                }
+                if conversation_id:
+                    store.append_event(
+                        owner,
+                        conversation_id,
+                        {
+                            "id": action_id,
+                            "type": "action.completed",
+                            "status": value.get("status"),
+                            "created_at": value.get("updated_at"),
+                            "summary": result_summary,
+                        },
+                    )
+                yield sse_event(
+                    "action.completed",
+                    action_id=action_id,
+                    summary=result_summary,
+                    outcome=execution_result.get("outcome"),
+                    results=_project_execution_items(
+                        execution_result.get("items")
+                    ),
+                    status=value.get("status"),
+                )
+                yield sse_event("run.completed", action_id=action_id)
+            elif event_name == "failed":
+                yield sse_event(
+                    "run.failed",
+                    action_id=action_id,
+                    message=value,
+                )
+            elif event_name == "done":
+                return
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def cancel_action(action_id: str):
+    _holder, owner, _role = _identity()
+    try:
+        action = ActionService(store=_store()).cancel(owner, action_id)
+        return _ok(action=action, data=action)
+    except Exception as exc:
+        return _error(str(exc), 409)

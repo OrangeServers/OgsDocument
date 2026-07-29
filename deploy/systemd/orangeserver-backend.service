@@ -1,0 +1,25 @@
+[Unit]
+Description=OrangeServer Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orange
+Group=orange
+# DEPLOY-AUDIT P0-3: 与 DEPLOY.md 文件布局对齐 (/opt/orangeserver/app/backend)
+WorkingDirectory=/opt/orangeserver/app/backend
+EnvironmentFile=/etc/orangeserver/backend.env
+ExecStart=/opt/orangeserver/venv/bin/python -m gunicorn --workers 1 --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --worker-connections 1000 --bind 127.0.0.1:28000 --timeout 60 --keep-alive 5 --access-logfile - --error-logfile - --log-level info wsgi:app
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=30
+PrivateTmp=true
+NoNewPrivileges=true
+UMask=0077
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

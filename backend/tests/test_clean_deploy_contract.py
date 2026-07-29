@@ -1,0 +1,280 @@
+# -*- coding: utf-8 -*-
+"""Cold-start deployment contracts exercised by the real deployment artifacts."""
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BACKEND = REPO_ROOT / "backend"
+DEPLOY = REPO_ROOT / "deploy"
+OPS = REPO_ROOT / "ops"
+
+
+def test_docker_health_reads_non_default_port_from_root_env():
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    target = makefile.split("docker-health:", 1)[1].split("\n\n", 1)[0]
+    assert "OGS_HTTP_PORT" in target
+    assert "/.env" in target
+    assert "${port:-8080}" in target
+
+
+def test_private_repository_does_not_allocate_github_hosted_runners():
+    workflows = (
+        REPO_ROOT / ".github" / "workflows" / "ci.yml",
+        REPO_ROOT / ".github" / "workflows" / "deploy-site.yml",
+    )
+    for path in workflows:
+        source = path.read_text(encoding="utf-8")
+        jobs_source = source.split("\njobs:\n", 1)[1]
+        job_count = len(
+            re.findall(r"^  [a-zA-Z][\w-]*:\s*$", jobs_source, re.MULTILINE)
+        )
+        guard_count = source.count("if: ${{ github.event.repository.private == false }}")
+        assert guard_count == job_count, f"{path.name} has an unguarded job"
+
+
+def test_backend_image_publish_is_guarded_while_repository_is_private():
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "publish-backend-image.yml"
+    ).read_text(encoding="utf-8")
+    assert "packages: write" in workflow
+    assert "contents: write" in workflow
+    assert (
+        "github.event.repository.private == false"
+        " && github.repository == 'OrangeServers/OrangeServer'"
+    ) in workflow
+    assert "secrets.GITHUB_TOKEN" in workflow
+    assert "linux/amd64" in workflow
+    assert "release:" not in workflow.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in workflow
+    assert "npm run build" in workflow
+    assert "ops/build-deploy-bundle.sh" in workflow
+    assert "gh release upload" in workflow
+    assert "gh release view" in workflow
+    assert "--json isDraft" in workflow
+    assert "packages/container/orangeserver-backend/versions" in workflow
+    assert "GHCR tag $RELEASE_TAG already exists" in workflow
+    assert "could not verify GHCR tag immutability" in workflow
+    assert '"release-assets/bootstrap-compose.sh"' in workflow
+    assert "--clobber" not in workflow
+    assert ":latest" not in workflow
+
+
+def test_prebuilt_image_path_is_explicit_and_local_build_remains_default():
+    compose = (DEPLOY / "docker-compose.yml").read_text(encoding="utf-8")
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    env_example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+    expected_image = (
+        "${OGS_BACKEND_IMAGE:-orangeserver-backend}:"
+        "${OGS_BACKEND_TAG:-latest}"
+    )
+    assert expected_image in compose
+    assert "build:" in compose
+    local_target = makefile.split("docker-up:", 1)[1].split("\n\n", 1)[0]
+    assert "--build" in local_target
+    image_target = makefile.split("docker-up-image:", 1)[1].split("\n\n", 1)[0]
+    assert "OGS_BACKEND_IMAGE" in image_target
+    assert "OGS_BACKEND_TAG" in image_target
+    assert "禁止 latest" in image_target
+    assert "--no-build" in image_target
+    assert "# OGS_BACKEND_IMAGE=ghcr.io/orangeservers/orangeserver-backend" in env_example
+
+
+def test_compose_bootstrap_is_a_versioned_checksumming_thin_wrapper():
+    bootstrap = (OPS / "bootstrap-compose.sh").read_text(encoding="utf-8")
+    docs = (REPO_ROOT / "DEPLOY.md").read_text(encoding="utf-8")
+    assert "--version must use stable SemVer" in bootstrap
+    assert "--project-name" in bootstrap
+    assert '"${PROJECT_NAME,,}"' in bootstrap
+    assert '"${PROJECT_NAME}_mysql-data"' in bootstrap
+    assert 'set_key .env COMPOSE_PROJECT_NAME "$PROJECT_NAME"' in bootstrap
+    assert "releases/download/${VERSION}" in bootstrap
+    assert "sha256sum -c" in bootstrap
+    assert "bash ops/preflight-compose.sh bundled" in bootstrap
+    assert "make docker-up-image" in bootstrap
+    assert "openssl rand -hex" in bootstrap
+    assert "OGS_FLASK_SECRET_KEY \"\"" in bootstrap
+    assert "OGS_FERNET_KEYS \"\"" in bootstrap
+    assert "docker volume inspect" in bootstrap
+    assert "docker build" not in bootstrap
+    assert "down -v" not in bootstrap
+    assert (
+        "github.com/OrangeServers/OrangeServer/releases/download/"
+        "vX.Y.Z/bootstrap-compose.sh"
+    ) in docs
+    assert "raw.githubusercontent.com" not in docs
+
+
+def test_compose_does_not_force_global_container_names():
+    compose = (DEPLOY / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "container_name:" not in compose
+
+
+def test_release_bundle_contains_all_compose_runtime_inputs():
+    builder = (OPS / "build-deploy-bundle.sh").read_text(encoding="utf-8")
+    for path in (
+        ".env.example",
+        "Makefile",
+        "backend/.env.example",
+        "backend/mysqldir/orange.sql",
+        "deploy/docker-compose.yml",
+        "deploy/nginx/frontend_container.conf",
+        "deploy/nginx/ogs_proxy_common.conf",
+        "frontend/dist/index.html",
+        "ops/preflight-compose.sh",
+        "ops/bootstrap-compose.sh",
+    ):
+        assert f'"{path}"' in builder
+    assert "sha256sum" in builder
+    assert "references missing file" in builder
+    assert '"${OUTPUT_DIR}/bootstrap-compose.sh"' in builder
+    assert "install -m 0755" in builder
+
+
+def test_preflight_allows_absent_optional_env_key(tmp_path):
+    if shutil.which("bash") is None:
+        pytest.skip("bash is required to execute the deployment preflight probe")
+    source = (OPS / "preflight-compose.sh").read_text(encoding="utf-8")
+    match = re.search(r"load_env_val\(\) \{.*?\n\}", source, re.DOTALL)
+    assert match, "preflight must define load_env_val"
+    env_file = tmp_path / "backend.env"
+    env_file.write_text("OGS_FERNET_KEYS=\n", encoding="utf-8")
+    probe = (
+        "set -uo pipefail\n"
+        f"{match.group(0)}\n"
+        f"load_env_val '{env_file.as_posix()}' OGS_FERNET_KEY >/dev/null\n"
+    )
+    result = subprocess.run(
+        ["bash", "-c", probe], capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_preflight_does_not_create_a_false_shell_port_override():
+    source = (OPS / "preflight-compose.sh").read_text(encoding="utf-8")
+    assert "HTTP_PORT_VALUE=$(load_env_val" in source
+    assert "\nOGS_HTTP_PORT=$(load_env_val" not in source
+
+
+def test_container_nginx_config_is_valid_for_non_default_port():
+    common = (DEPLOY / "nginx" / "ogs_proxy_common.conf").read_text(encoding="utf-8")
+    frontend = (DEPLOY / "nginx" / "frontend_container.conf").read_text(encoding="utf-8")
+    assert "proxy_set_header Host $http_host;" in common
+    assert "proxy_set_header Host $host;" not in common
+    assert "proxy_read_timeout" not in common
+    assert "proxy_send_timeout" not in common
+    assert frontend.count("proxy_set_header Host $http_host;") == 2
+    assert "proxy_set_header Host $host;" not in frontend
+
+
+def test_anonymous_routes_explicitly_skip_session_csrf():
+    from app.api import account_api, local_api
+
+    anonymous = [
+        rule
+        for module in (account_api, local_api)
+        for rule in module.ROUTES
+        if not rule.need_auth
+    ]
+    assert anonymous
+    assert all(rule.skip_csrf for rule in anonymous), [
+        rule.url for rule in anonymous if not rule.skip_csrf
+    ]
+
+
+def test_frontend_does_not_probe_authenticated_status_without_session_cookie():
+    app_vue = (REPO_ROOT / "frontend" / "src" / "App.vue").read_text(encoding="utf-8")
+    assert "hasSessionCookie" in app_vue
+    assert "startsWith('csrf_token=')" in app_vue
+    assert "if (hasSessionCookie) appInit()" in app_vue
+
+
+def test_fresh_schema_matches_password_version_model():
+    schema = (BACKEND / "mysqldir" / "orange.sql").read_text(encoding="utf-8")
+    table = re.search(
+        r"CREATE TABLE `t_acc_user` \(.*?\n\) ENGINE=", schema, re.DOTALL,
+    )
+    assert table, "orange.sql must define t_acc_user"
+    ddl = table.group(0)
+    assert "`password_version` int" in ddl
+    assert "DEFAULT '2'" in ddl or "DEFAULT 2" in ddl
+    assert "idx_acc_user_password_version" in ddl
+    seed_lines = [
+        line for line in schema.splitlines()
+        if line.startswith("INSERT INTO `t_acc_user`")
+    ]
+    assert seed_lines
+    assert all("`password_version`" in line for line in seed_lines)
+
+
+def test_baseline_tables_contain_every_current_orm_column():
+    """Existing baseline tables are not altered by SQLAlchemy db.create_all()."""
+    from app.core.db.database import db
+
+    schema = (BACKEND / "mysqldir" / "orange.sql").read_text(encoding="utf-8")
+    ddl_columns = {}
+    for match in re.finditer(
+        r"CREATE TABLE `([^`]+)` \((.*?)\)\s*ENGINE=",
+        schema,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        ddl_columns[match.group(1)] = set(
+            re.findall(r"^\s*`([^`]+)`\s+", match.group(2), re.MULTILINE)
+        )
+
+    missing = {}
+    for table_name, table in db.metadata.tables.items():
+        if table_name not in ddl_columns:
+            continue
+        absent = set(table.columns.keys()) - ddl_columns[table_name]
+        if absent:
+            missing[table_name] = sorted(absent)
+
+    assert missing == {}, f"orange.sql is behind ORM columns: {missing}"
+
+
+def test_baseline_varchar_lengths_match_current_orm():
+    from app.core.db.database import db
+
+    schema = (BACKEND / "mysqldir" / "orange.sql").read_text(encoding="utf-8")
+    ddl_lengths = {}
+    for match in re.finditer(
+        r"CREATE TABLE `([^`]+)` \((.*?)\)\s*ENGINE=",
+        schema,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        ddl_lengths[match.group(1)] = {
+            name: int(length)
+            for name, length in re.findall(
+                r"^\s*`([^`]+)`\s+varchar\((\d+)\)",
+                match.group(2),
+                re.IGNORECASE | re.MULTILINE,
+            )
+        }
+
+    mismatches = {}
+    for table_name, table in db.metadata.tables.items():
+        if table_name not in ddl_lengths:
+            continue
+        for column in table.columns:
+            orm_length = getattr(column.type, "length", None)
+            ddl_length = ddl_lengths[table_name].get(column.name)
+            if orm_length and ddl_length and orm_length != ddl_length:
+                mismatches[f"{table_name}.{column.name}"] = (ddl_length, orm_length)
+
+    assert mismatches == {}, f"orange.sql varchar length != ORM: {mismatches}"
+
+
+def test_dockerfile_builds_from_committed_requirements_without_resolving_lock():
+    dockerfile = (BACKEND / "Dockerfile").read_text(encoding="utf-8")
+    assert "pip-compile" not in dockerfile
+    assert "COPY requirements.txt" in dockerfile
+    assert "pip wheel" in dockerfile
+    assert "FROM base AS runtime" in dockerfile
+    assert "/app/.gunicorn" in dockerfile

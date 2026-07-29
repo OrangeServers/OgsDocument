@@ -1,0 +1,27 @@
+# =============================================================================
+# OrangeServer .gitattributes — 强制 Linux 文件使用 LF 换行
+# =============================================================================
+# 防止 Windows 开发机提交 CRLF 导致 Linux 上 bash/systemd 解析失败
+# REV49: 物理机部署评审要求
+# =============================================================================
+
+# Linux 运维脚本
+*.sh              text eol=lf
+
+# systemd unit
+*.service         text eol=lf
+
+# Supervisor / Nginx 配置
+*.conf            text eol=lf
+
+# 环境模板
+*.env.example     text eol=lf
+
+# Makefile (tab 缩进要求)
+Makefile          text eol=lf
+
+# SQL 文件
+*.sql             text eol=lf
+
+# Vite 入口由 Windows 构建生成，但发布仓库统一存为 LF
+frontend/dist/index.html text eol=lf

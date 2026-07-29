@@ -1,0 +1,76 @@
+# 前端 .gitignore（局部规则，跨子项目统一规则见根 .gitignore）
+#
+# 根 .gitignore 已覆盖：.idea/ .vscode/ .qoder/ .claude/ .gemini/
+#                     node_modules/  dist/  *.log
+#                     .code-review-graph/
+#
+# 本文件仅保留前端特有规则：
+
+# ---------- IDE 残留 ----------
+.idea/
+*.iml
+
+# ---------- Node.js ----------
+node_modules/
+!dist/  # 重新 include dist - frontend pre-build 制品入仓 (2026-07-04, deploy 部署机不需 node/npm)
+dist-ssr/
+*.local
+
+# ---------- 系统文件 ----------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ---------- TypeScript / Vue 构建缓存 ----------
+*.tsbuildinfo
+.cache/
+.parcel-cache/
+.vite/
+
+# ---------- 测试覆盖 ----------
+coverage/
+
+# ---------- 环境变量 ----------
+#   .env.development / .env.production 是项目共享配置（已入仓）
+#   用户本地覆写用 .env.local / .env.development.local 等
+.env
+.env.local
+.env.*.local# Python 编译文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Excel 临时文件
+~$*.xlsx
+~$*.xls
+
+# IDE
+.idea/
+*.iml
+*.xml
+*.ipr
+*.iws
+
+# 日志
+*.log
+
+# Node.js
+node_modules
+dist-ssr
+*.local
+
+# 系统文件
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 环境配置（按需取消注释）
+# .env.development
+# .env.production
+# Added by code-review-graph
+.code-review-graph/

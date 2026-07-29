@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible OrangeServer problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, real infrastructure identifiers, or security vulnerabilities.
+        Report vulnerabilities privately according to SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release, commit, or container image tag
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker Compose
+        - Physical host
+        - Kubernetes
+        - Development environment
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic data and the smallest reproducible sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Relevant status codes, console output, and minimal logs after removing private data.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed credentials, cookies, private addresses, hostnames, usernames, paths, audit data, and personal information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

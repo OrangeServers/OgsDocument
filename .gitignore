@@ -1,0 +1,132 @@
+# =============================================================================
+# OrangeServer 根 .gitignore（整合前后端）
+# =============================================================================
+# 注：
+#   - backend/.gitignore 和 frontend/.gitignore 各自仍保留（局部规则）
+#   - 本文件放跨子项目的统一规则
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+*.egg
+*.egg-info/
+.pytest_cache/
+.pytest_tmp*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ---------- Node ----------
+node_modules/
+.pnpm-store/
+.tmp-qa/
+pnpm-lock.yaml
+dist/
+# pre-build 产物入仓，部署机无需 node/npm
+!frontend/dist/
+!frontend/dist/**
+.vite/
+
+# ---------- 编辑器 / IDE ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------- AI 工具配置（本地工具元数据，不入库）----------
+#   .qoder/     = Qoder AI 配置（项目使用中，本地元数据仍不入仓）
+#   .claude/    = Claude CLI 备用（当前未使用）
+#   .gemini/    = Gemini CLI 备用（当前未使用）
+#   .code-review-graph/ = code-review-graph 评审图谱
+.claude/
+.gemini/
+.qoder/
+.code-review-graph/
+
+# ---------- 环境与密钥（绝不进 git）----------
+.env
+.env.local
+.env.*.local
+!.env.example
+*.key
+*.pem
+*.crt
+# 冗余防御：SSH 私钥/运行时数据不入仓（即使路径变更也能挡）
+**/data/key/
+**/data/avatars/
+**/data/file/
+**/data/log/
+*.rsa
+*.pub.bak
+id_rsa*
+id_ed25519*
+**/id_rsa
+**/id_ed25519
+
+# ---------- 日志 ----------
+*.log
+logs/
+
+# ---------- 运行时数据目录（不入仓） ----------
+#   原因：data/ 下均为运行时生成（用户头像、SFTP 上传、SSH 私钥、日志）
+#   SSH 私钥（data/key/）尤为敏感，绝不能提交到公开仓库
+#   默认值参见 backend/app/core/config.py:FILE_CONF
+backend/data/
+!backend/data/.gitkeep
+
+# ---------- 构建产物 ----------
+backend/static/
+
+# ---------- 临时文件 ----------
+*.tmp
+*.bak
+*~
+.nfs*
+.tmp/
+.tmp-backend-tests/
+/data/
+.mcp.json
+# 包管理器统一 npm (package-lock.json), pnpm lock 不入仓防双 lock 漂移
+pnpm-lock.yaml
+
+# ---------- 隐私清理临时文件 (git filter-repo / bfg 等) ----------
+#   secrets-to-replace.txt 等脱敏映射表不入仓
+secrets-to-replace.txt
+secrets.txt
+passwords.txt
+
+# ---------- 其他 AI 工具本地元数据 ----------
+.opencode.json
+.codex/
+.agents/
+skills-lock.json
+docs/research/
+
+# ---------- 本地部署笔记（特定机器环境，不入仓）----------
+.deploy_notes_*.md
+docker_run_review.md
+QODER_physical_backend_deploy_runbook.md
+REV49_physical_backend_deploy_assessment.md
+ogs_sync.tar.gz
+
+# ---------- 临时脚本（调试用，不入仓）----------
+ops/_*
+
+# ---------- 截图（验证用，不入仓）----------
+screenshot_*.png
+data/screenshot_*.png
+
+# ---------- 评审归档文档（历史 REV 文档，不入仓）----------
+REV*_review.md
+REV*_SUMMARY.md
+REV_BACKLOG.md
+QODER.md

@@ -1,0 +1,75 @@
+# =============================================================================
+# OrangeServer flake8 配置 (ti2-CI)
+# =============================================================================
+# 设计原则:
+#   - 聚焦空白/缩进/换行 (W2xx/W3xx/E1xx/E3xx), 这是格式 bug 的主要来源
+#   - 容忍语义误报: F 类 (pyflakes) 与 B 类 (bugbear) 在现有项目里大批量误报
+#     (F405 star import 是项目约定 / F601 重复 dict key 是业务上覆盖 / B007/B014/B023
+#      是 flake8-bugbear 的深度检查, 现有代码大规模违反, 留给后续重构专项处理)
+#   - 真正的高危问题 (F821 undefined name / F811 redefinition) 暂不引入, 但保留
+#     在 `select` 中以便后续 ti3-CI-HINT 阶段逐步打开
+#
+# 排除:
+#   - .git / __pycache__: 无源码
+#   - _archive: 历史代码冻结, 不参与新评审
+#   - data: 运行时数据目录
+#   - tests: 已有专门测试规范
+#   - app/tools/ansible_runner: 子进程测试不稳定, CI pytest 也已 --ignore
+#   - build / dist / frontend: 打包产物 / 前端代码
+# =============================================================================
+
+[flake8]
+max-line-length = 120
+# 严格模式: 选中项必须 0 错误
+select =
+    E1,
+    E2,
+    E3,
+    E7,
+    E9,
+    W1,
+    W2,
+    W3,
+    W5,
+    W6
+# 明确容忍项 (在 select 范围内选择性忽略)
+# E121  continuation line indentation (与 max-line-length 冲突)
+# E126  continuation line over-indented for hanging indent
+# E127  continuation line over-indented for visual indent
+# E128  continuation line under-indented for visual indent
+# E226  missing whitespace around arithmetic operator (项目风格允许)
+# E265  block comment should start with '# ' (项目单 # 后接文本)
+# E305  expected 2 blank lines (项目倾向 1 行, 不会语义错)
+# E501  line too long (已由 max-line-length=120 控制)
+# E731  do not assign a lambda expression, use a def (decorator 链需要)
+# E402  module level import not at top of file (conftest 必用)
+# E712  comparison to False/True (项目 SQLAlchemy 风格 `== False`, m6 测试校验)
+# W503  line break before binary op (新风格允许)
+# W504  line break after binary op (与 W503 二选一)
+# W605  invalid escape sequence (re 正则中常见 \d \s 等)
+ignore =
+    E121,
+    E126,
+    E127,
+    E128,
+    E226,
+    E265,
+    E305,
+    E501,
+    E731,
+    E402,
+    E712,
+    W503,
+    W504,
+    W605,
+exclude =
+    .git,
+    __pycache__,
+    .pytest_cache,
+    _archive,
+    data,
+    tests,
+    app/tools/ansible_runner,
+    build,
+    dist,
+    frontend

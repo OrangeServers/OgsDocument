@@ -1,0 +1,39 @@
+# =============================================================================
+# OrangeServer pytest-cov 配置 (ti2-COV)
+# =============================================================================
+# 排除范围:
+#   - ansible_runner: 子进程 wrapper, CI pytest 已 --ignore
+#   - __init__.py:    包初始化, 0 行
+#   - migrations:     一次性 SQL 脚本
+#   - mysqldir:       迁移 SQL (已在 tier2 test 覆盖)
+
+[run]
+source = app
+branch = true
+data_file = .coverage
+
+[report]
+# 排除正则
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    def __repr__
+    raise ImportError
+    pass
+# 不计入覆盖的文件路径
+omit =
+    app/tools/ansible_runner/*
+    app/__init__.py
+    app/*/__init__.py
+# 低于此数显示 missing line, 0 = 总是显示
+show_missing = true
+skip_empty = true
+sort = -Cover
+precision = 1
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

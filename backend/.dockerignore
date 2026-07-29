@@ -1,0 +1,123 @@
+# =============================================================================
+# OrangeServer 后端 .dockerignore（REVIEW-15 P1-6 + ti3-DOCKER 2026-07-02）
+# =============================================================================
+# 减少镜像体积 + 减少攻击面 + 防敏感配置泄露
+# 注：.gitignore 是 git 用的，.dockerignore 是 docker build 用的，必须分开写
+#
+# ti3-DOCKER 增量优化点（2026-07-02）：
+#   - tests/ 183 个测试文件不进生产镜像
+#   - dev 配置文件（.flake8/.bandit/.coveragerc/codecov.yml/mypy.ini）不进
+#   - requirements.in/requirements-dev.txt 不进（lock 文件已够）
+#   - mysqldir/ 迁移 SQL 是 dev 工具
+#   - conf/seed/ 种子数据/初始头像运行时再生成
+#   - __pycache__/.pytest_cache/.mypy_cache 等缓存不进
+#   - LICENSE/README.md/*.md 文档不进（*.md 模式 + LICENSE 显式排除）
+# =============================================================================
+
+# ---------- Git / IDE 元数据 ----------
+.git
+.gitignore
+.gitattributes
+.github
+.gitlab
+.idea
+.vscode
+.qoder
+.code-review-graph
+
+# ---------- 开发/审计/调试脚本（不参与生产） ----------
+_archive
+_tmp_*.py
+_tmp_*.sh
+_diag*.py
+_debug_*.py
+_debug_*.sh
+_migrate_code_to_100.py
+dep_audit.py
+verify_*.py
+verify_*.sh
+verify_*.log
+t4_*.py
+t4_*.sh
+fix_*.py
+fix_*.sh
+verify-shots
+debug.log
+*.log
+
+# ---------- Python 缓存 ----------
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+coverage.xml
+htmlcov
+.tox
+.nox
+
+# ---------- 运行时数据（容器内会重新创建） ----------
+data
+data_old
+data.bak
+# 迁移 SQL 不进镜像 (DEPLOY-AUDIT P2-17: schema 来源只有两条——
+#   compose bundled 由宿主挂载 orange.sql 走 mysql initdb;
+#   或 setup 向导 / cron.py 的 db.create_all() 以 ORM 模型为准建表)
+mysqldir
+# 种子数据/初始头像：运行时由 conf/seed/avatars/ 重新生成
+conf/seed
+# 测试目录（183 个文件）绝对不进生产镜像
+tests
+conftest.py
+# ti3-DOCKER: 调试脚本根目录的 .py 调试器
+_debug_*.py
+_debug_*.sh
+
+# ---------- 部署侧文件（容器内不需要） ----------
+# 注意：supervisor/ 用于宿主进程，容器内用 CMD 启动 gunicorn
+supervisor
+install.sh
+start.sh
+Flask_App_Settings.py
+Flask_App_Settings.pyc
+
+# ---------- 开发侧配置文件（不进生产镜像） ----------
+# ti3-DOCKER (2026-07-02): 这些配置是 dev 工具，运行时无意义
+.flake8
+.bandit
+.coveragerc
+codecov.yml
+mypy.ini
+requirements-dev.txt
+# 注: requirements.in 不能排除 — Dockerfile builder 阶段需跑 pip-compile 生成 requirements.lock
+# 文本几十行不占空间, 但不能缺
+
+# ---------- Node 误入 ----------
+node_modules
+
+# ---------- 文档 ----------
+*.md
+!app/**/README.md
+README.md
+LICENSE
+# ti3-DOCKER: REV*.md 覆盖 REVIEW*/REV16/REV25/REV28/REV40-44/REV_BACKLOG 等所有评审文档
+REV*.md
+SUMMARY*.md
+
+# ---------- 环境与密钥文件（绝不能进镜像） ----------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+
+# ---------- 镜像 / 静态资源（前端产物，不在后端） ----------
+dist
+*.tgz
+*.tar.gz
+*.zip

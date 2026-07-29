@@ -1,0 +1,39 @@
+# =============================================================================
+# OrangeServer docker-compose — 开发模式覆盖 (REV48/REV49)
+# =============================================================================
+# 与 deploy/docker-compose.yml 叠加使用:
+#   make docker-dev-up
+#   或: docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
+# 作用:
+#   - 挂载本地源码 (volume bind), 无需重建镜像即可热更新
+#   - 暴露后端 28000 端口供本地调试
+#   - MySQL / Redis 用本地已运行实例 (host.docker.internal 走 host-gateway)
+#
+# REV48 修复 (P1-3):
+#   - command 加 --host 0.0.0.0 (init.py 默认 127.0.0.1, 宿主机访问 28000 必失败)
+#   - OGS_BIND_HOST env 不读 (init.py 只认命令行 --host, supervisor 用 gunicorn -b)
+#   - 删 version: '3.8' (新 compose 会告警)
+# REV49: 加 extra_hosts (REV49 从基础 compose 中删除了, dev 模式需要)
+# =============================================================================
+
+services:
+  backend:
+    build: {}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../backend:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    ports:
+      - "28000:28000"
+    environment:
+      OGS_ENV: dev
+      OGS_HTTPS: "false"
+      OGS_MYSQL_HOST: ${OGS_MYSQL_HOST:-host.docker.internal}
+      OGS_REDIS_HOST: ${OGS_REDIS_HOST:-host.docker.internal}
+    command:
+      - python
+      - init.py
+      - --host
+      - "0.0.0.0"

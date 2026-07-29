@@ -1,0 +1,127 @@
+// auth 命名空间：Login / Register / AuthShell（批次 A）
+export default {
+  brand: {
+    slogan: 'AI 运维平台 · Mission Control',
+  },
+  field: {
+    username: '用户名',
+    password: '密码',
+    captcha: '验证码',
+    email: '邮箱',
+    emailCode: '邮箱验证码',
+    newPassword: '新密码',
+    setPassword: '设置密码',
+    confirmPassword: '确认密码',
+  },
+  placeholder: {
+    username: '请输入用户名',
+    password: '请输入密码',
+    captchaResult: '请输入计算结果',
+  },
+  validation: {
+    usernameRequired: '请输入用户名',
+    passwordRequired: '请输入密码',
+    captchaRequired: '请输入验证码',
+    captchaNumeric: '请输入计算结果（数字）',
+    emailRequired: '请输入邮箱',
+    emailFormat: '邮箱格式不正确',
+    newPasswordRequired: '请输入新密码',
+    newPasswordMin: '密码至少6位',
+    passwordMin8: '密码至少 8 位',
+    confirmPasswordRequired: '请确认密码',
+  },
+  login: {
+    brandTitleLead: '让运维',
+    brandTitleAccent: '简单可控',
+    brandDescLine1: '统一入口管理服务器资产、批量执行命令与脚本，',
+    brandDescLine2: '所有操作可审计、可回溯、可告警。',
+    feature1: '资产集中纳管',
+    feature2: '批量命令与脚本分发',
+    feature3: '完整操作审计与录屏',
+    title: '欢迎回来',
+    subtitle: '使用您的账号登录 OrangeServer 控制台',
+    captchaRefresh: '点击换一题',
+    submit: '登 录',
+    submitLocked: '登录已禁用 ({s}s)',
+    registerNow: '立即注册',
+    forgotPassword: '忘记密码？',
+    lockedRetry: '登录已临时禁用，请 {s} 秒后再试',
+    captchaNotLoaded: '验证码未加载，请点击刷新',
+    success: '登录成功',
+    failLocked: '连续 {n} 次失败，登录已临时禁用 {s} 秒',
+    fail: '登录失败',
+    failWithReason: '登录失败: {msg}',
+    serverError: '服务端错误({status})',
+    networkError: '网络错误',
+  },
+  forgot: {
+    title: '重置密码',
+    emailPlaceholder: '请输入注册邮箱',
+    codePlaceholder: '6 位邮箱验证码',
+    newPasswordPlaceholder: '请输入新密码',
+    sendCode: '发送验证码',
+    submit: '重置密码',
+    emailFirst: '请先输入邮箱',
+    codeSent: '验证码已发送',
+    sendFail: '发送失败',
+    resetSuccess: '密码重置成功，请重新登录',
+    resetFail: '重置失败',
+  },
+  register: {
+    brandTitleLead: '开启你的',
+    brandTitleAccent: '运维之旅',
+    brandDescLine1: '创建一个账号，加入你的团队，',
+    brandDescLine2: '即可开始统一管理资产、命令与脚本。',
+    step1Name: '填写基本信息',
+    step1Desc: '用户名、邮箱与登录密码',
+    step2Name: '验证邮箱',
+    step2Desc: '点击邮件中的验证码完成激活',
+    step3Name: '开始管理资产',
+    step3Desc: '登录控制台，添加主机与用户',
+    title: '创建账号',
+    subtitle: '几分钟即可开始管理你的服务器资产',
+    check: '检查',
+    emailPlaceholder: '用于接收激活验证码',
+    codePlaceholder: '请输入邮件中的 6 位验证码',
+    getCode: '获取验证码',
+    resendIn: '{s}s 后重试',
+    passwordPlaceholder: '至少 8 位，含字母与数字',
+    confirmPlaceholder: '再次输入密码',
+    strengthLabel: '密码强度：',
+    pwMismatch: '两次输入的密码不一致',
+    agreePrefix: '我已阅读并同意',
+    agreeAnd: '与',
+    terms: '服务条款',
+    privacy: '隐私政策',
+    submit: '注 册',
+    haveAccount: '已有账号？',
+    loginNow: '立即登录',
+    acknowledged: '我已知晓',
+    usernameFirst: '请先输入用户名',
+    usernameAvailable: '该用户名可用',
+    usernameTaken: '该用户名已存在',
+    emailFirst: '请先输入邮箱',
+    codeSent: '验证码已发送，请查收邮箱',
+    sendFail: '发送失败',
+    pwTooWeak: '密码强度过低，请使用字母+数字+特殊字符的组合',
+    success: '注册成功，请登录',
+    fail: '注册失败',
+    requestFail: '注册请求失败',
+    termsContent: `OrangeServer 服务条款（示例）
+
+1. 服务范围：本平台提供服务器资产管理、命令执行与审计能力。
+2. 使用规范：用户应遵守所在组织的安全策略，不得用于未授权访问。
+3. 责任限制：因误操作导致的数据丢失或业务影响由使用者自行承担。
+4. 账号安全：请妥善保管密码，平台不存储明文密码（单向哈希）。
+
+（这是临时示例文本，后续可接入真实的法务条款文档或页面路由）`,
+    privacyContent: `OrangeServer 隐私政策（示例）
+
+1. 数据收集：注册时收集用户名、邮箱；登录时记录 IP / 设备 / 时间。
+2. 数据用途：用于身份认证、操作审计、安全告警，不向第三方共享。
+3. 密码存储：使用单向哈希（PBKDF2/bcrypt 之类）存储，不保存明文。
+4. Cookie 使用：登录态使用 HttpOnly Cookie，JS 无法读取，防 XSS 窃取。
+
+（这是临时示例文本，后续可接入真实的隐私政策文档或页面路由）`,
+  },
+}

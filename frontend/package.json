@@ -1,0 +1,33 @@
+{
+  "name": "v2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/check-i18n.mjs && vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit",
+    "check-i18n": "node scripts/check-i18n.mjs"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "axios": "^1.18.1",
+    "echarts": "^6.1.0",
+    "element-plus": "^2.14.1",
+    "qs": "^6.15.2",
+    "vue": "^3.5.34",
+    "vue-echarts": "^8.0.1",
+    "vue-i18n": "^11.4.8",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.12",
+    "vue-tsc": "^2.2.12"
+  }
+}

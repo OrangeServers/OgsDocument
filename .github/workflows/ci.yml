@@ -1,0 +1,299 @@
+# =============================================================================
+# OrangeServer CI (ti2-CI)
+# =============================================================================
+# 5 job 流水线:
+#   1. pytest         - 全量 1955+ 测试 (mock 化, 无需真 MySQL/Redis)
+#   2. flake8         - PEP8/pyflakes 代码风格
+#   3. bandit         - 静态安全扫描 (中/高危)
+#   4. build          - backend/Dockerfile 多阶段构建验证
+#   5. build-frontend - 前端 npm ci + npm run build + 上传 dist artifact
+#
+# 设计约束 (ti2-CI 完工路径硬约束):
+#   - 单 Python 3.12 + ubuntu-latest (覆盖 Dockerfile 中实际版本)
+#   - 跳过 mypy (留给 ti3-HINT, 项目尚未补 type hints)
+#   - 跳过 mysqld/redis service container (tests/conftest.py 已 mock 全部依赖)
+#   - 跳过 codecov 上传 (留给 ti2-COV 一起做)
+#   - 期间禁止新增任何 CI job
+#   - build-frontend 是 2026-07-04 后续追加（前端 pre-build 原则落地）
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 全局取消已有运行, 避免冗余
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  # 不设 PIP_NO_CACHE_DIR: 避免与 actions/setup-python@v5 的 pip cache 冲突
+  # (setup-python 会调 pip cache dir, PIP_NO_CACHE_DIR=1 会让 pip 拒动 cache 命令)
+
+jobs:
+  # ===========================================================================
+  # 1) pytest - 全量回归
+  # ===========================================================================
+  pytest:
+    if: ${{ github.event.repository.private == false }}
+    name: pytest (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install runtime + dev dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          # 用 requirements.in (源码) 而非 lock, CI 应当验证 in 中的版本可解析
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        working-directory: backend
+        run: |
+          # 与本地一致: --ignore=app/tools/ansible_runner (子进程测试不稳定)
+          # conftest.py 已 mock 全部 MySQL/Redis/SSH 依赖, 无需真数据库
+          # --cov=app: ti2-COV 覆盖率 (达到 60% 为完工标志)
+          # --cov-report=xml: codecov upload 需要 coverage.xml
+          python -m pytest tests/ \
+            -q --tb=line --no-header \
+            -p no:cacheprovider \
+            --ignore=app/tools/ansible_runner \
+            --timeout=30 --timeout-method=thread \
+            --cov=app \
+            --cov-branch \
+            --cov-fail-under=0 \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=xml:coverage.xml
+      # ti2-COV: 上传覆盖率到 Codecov (Codecov token 配置在 repo secrets)
+      # 即使 pytest 失败也上传 (fail_ci_if_error=false), 便于查看失败时的覆盖率快照
+      - name: Upload coverage to Codecov
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'pull_request')
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ===========================================================================
+  # 2) flake8 - 代码风格
+  # ===========================================================================
+  flake8:
+    if: ${{ github.event.repository.private == false }}
+    name: flake8 (PEP8 / pyflakes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: pytest  # pytest 失败则跳过 (避免无意义排队)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install flake8
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 flake8-bugbear
+
+      - name: Run flake8
+        working-directory: backend
+        run: |
+          # 配置在 backend/.flake8: max-line-length=120 + 排除 tests/_archive/ansible_runner
+          flake8 app/ init.py
+
+  # ===========================================================================
+  # 3) bandit - 静态安全扫描
+  # ===========================================================================
+  bandit:
+    if: ${{ github.event.repository.private == false }}
+    name: bandit (AST security scan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: pytest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install bandit
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      - name: Run bandit
+        working-directory: backend
+        run: |
+          # -c .bandit: YAML 格式跳过规则 (业务设计选择)
+          # --severity-level medium: 只报中/高危 (low 误报太多)
+          bandit -c .bandit -r app/ init.py --severity-level medium
+
+  # ===========================================================================
+  # 4) build - Dockerfile 多阶段构建
+  # ===========================================================================
+  build:
+    if: ${{ github.event.repository.private == false }}
+    name: docker build (backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: pytest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        # 多阶段构建, 验证 Dockerfile 语法 + 所有 stage 可解析
+        # 标签用 commit SHA 便于追溯
+        run: |
+          docker build \
+            -f backend/Dockerfile \
+            -t orangeserver-backend:ci-${{ github.sha }} \
+            --load \
+            backend/
+
+  # ===========================================================================
+  # 5) build-frontend - 前端 npm build + 上传 dist artifact
+  # ===========================================================================
+  # 后续 release / 部署工作流可下载此 artifact 作为前端 pre-build 产物
+  # 退出 5 job 流水线之一, 与 build-backend 并列
+  build-frontend:
+    if: ${{ github.event.repository.private == false }}
+    name: frontend build (Vite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: pytest  # 与后端 job 共享 pytest 依赖 (前端的 type check 复用 backend pytest 跳过)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"  # Vite 8 要求 Node 18+, 用 20 LTS 稳定
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Verify dist/ produced
+        working-directory: frontend
+        run: |
+          if [ ! -d dist ] || [ ! -f dist/index.html ]; then
+            echo "[FAIL] frontend/dist 缺失或缺 index.html, npm run build 未产出预期产物"
+            exit 1
+          fi
+          du -sh dist
+          echo "--- dist/ 文件清单 ---"
+          ls -lah dist/
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7  # 默认 90 太长, 7 天够 release / 部署用
+          if-no-files-found: error
+
+  # ===========================================================================
+  # 6) initdb - orange.sql 在真实 mysql 容器里完整初始化 (DEPLOY-AUDIT P0-1 门禁)
+  #    历史上种子 INSERT 列数漂移 / FK 目标缺索引 / 字符集不匹配都让 bundled
+  #    部署必失败且从未被 CI 发现; 此 job 用与 compose 相同的 initdb 机制兜底。
+  # ===========================================================================
+  initdb:
+    if: ${{ github.event.repository.private == false }}
+    name: mysql initdb (orange.sql)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run orange.sql through mysql:8.0 initdb
+        run: |
+          docker run -d --name initdb-ci \
+            -e MYSQL_ROOT_PASSWORD=ci -e MYSQL_DATABASE=orange \
+            -v "$PWD/backend/mysqldir/orange.sql:/docker-entrypoint-initdb.d/orange.sql:ro" \
+            mysql:8.0
+          for i in $(seq 1 60); do
+            state=$(docker inspect initdb-ci --format '{{.State.Status}}')
+            if [ "$state" = "exited" ]; then break; fi
+            if docker logs initdb-ci 2>&1 | grep -q 'ready for connections.*port: 3306'; then
+              ready=1; break
+            fi
+            sleep 3
+          done
+          if [ "${ready:-0}" != "1" ]; then
+            echo '::error::orange.sql initdb failed'
+            docker logs initdb-ci 2>&1 | tail -40
+            exit 1
+          fi
+          tables=$(docker exec initdb-ci mysql -uroot -pci -N -e \
+            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema="orange" AND table_type="BASE TABLE"' 2>/dev/null)
+          echo "tables created: $tables"
+          if [ "$tables" -lt 20 ]; then
+            echo '::error::table count unexpectedly low'
+            exit 1
+          fi
+
+  # ===========================================================================
+  # 7) docs - 文档链接与隐私检查 (ops/check-docs.ps1)
+  # ===========================================================================
+  docs:
+    if: ${{ github.event.repository.private == false }}
+    name: docs (links & privacy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
+      - name: Run docs checks
+        # 坏链 / 内网 IP 泄漏 / 尾空格 / 许可证误标 (脚本详情见 ops/check-docs.ps1)
+        run: pwsh -File ops/check-docs.ps1

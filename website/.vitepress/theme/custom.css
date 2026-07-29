@@ -1,0 +1,107 @@
+/* OrangeServer 品牌色：与平台主题一致的橙色系 */
+:root {
+  --vp-c-brand-1: #e8590c;
+  --vp-c-brand-2: #f76707;
+  --vp-c-brand-3: #fd7e14;
+  --vp-c-brand-soft: rgba(253, 126, 20, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #fd7e14 30%, #e8590c);
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(253, 126, 20, 0.5) 50%,
+    rgba(255, 212, 59, 0.4) 50%
+  );
+  --vp-home-hero-image-filter: blur(72px);
+}
+
+.dark {
+  --vp-c-brand-1: #ffa94d;
+  --vp-c-brand-2: #fd7e14;
+  --vp-c-brand-3: #f76707;
+  --vp-c-brand-soft: rgba(255, 169, 77, 0.16);
+}
+
+/* hero 顶部 eyebrow 标签 */
+.hero-eyebrow {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vp-c-brand-2);
+  background: var(--vp-c-brand-soft);
+  border-radius: 999px;
+  padding: 5px 14px;
+  margin: 0 0 18px;
+}
+
+/* hero 左列入场编排 */
+.VPHomeHero .name,
+.VPHomeHero .text,
+.VPHomeHero .tagline,
+.VPHomeHero .actions,
+.hero-eyebrow {
+  animation: hero-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.VPHomeHero .name {
+  animation-delay: 0.05s;
+}
+.VPHomeHero .text {
+  animation-delay: 0.12s;
+}
+.VPHomeHero .tagline {
+  animation-delay: 0.2s;
+}
+.VPHomeHero .actions {
+  animation-delay: 0.28s;
+}
+.VPHomeHero .hero-extras {
+  animation: hero-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.36s both;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* hero 右侧：默认 image 容器是为 logo 设计的固定方块，
+   终端窗口替换后需要容器随内容自适应 */
+.VPHomeHero .image {
+  margin: 0;
+}
+.VPHomeHero .image-container {
+  width: 100%;
+  height: auto;
+  transform: none;
+}
+
+/* 终端窗口后的光晕放大、柔化，烘托窗口 */
+.VPHomeHero .image-bg {
+  width: min(620px, 110%);
+  height: min(620px, 110%);
+  opacity: 0.7;
+}
+
+@media (min-width: 960px) {
+  .VPHomeHero .image {
+    align-self: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPHomeHero .name,
+  .VPHomeHero .text,
+  .VPHomeHero .tagline,
+  .VPHomeHero .actions,
+  .VPHomeHero .hero-extras,
+  .hero-eyebrow {
+    animation: none;
+  }
+}

@@ -1,0 +1,171 @@
+# =============================================================================
+# OrangeServer docker-compose — 生产编排
+# =============================================================================
+# 服务（4 个, 2 模式）:
+#   - backend    Flask + gunicorn（gevent worker）
+#   - frontend   nginx serve dist/
+#   - redis      会话缓存 / CSRF token / 速率限制  [profile: bundled]
+#   - mysql      业务数据库                          [profile: bundled]
+#
+# 用法（两种部署模式）:
+#
+# 模式 A: bundled 模式（容器化自包含, 4 服务全起）
+#   docker compose --env-file .env -f deploy/docker-compose.yml --profile bundled up -d --build
+#
+# 模式 B: 外部 MySQL/Redis（只起 backend + frontend）
+#   docker compose --env-file .env -f deploy/docker-compose.yml up -d --build backend frontend
+#   需先在顶层 .env 中设 OGS_MYSQL_HOST / OGS_REDIS_HOST 为外部地址
+#
+# 镜像加速: 国内用户配 daemon.json mirror (deploy/daemon.json.example)
+# Dockerfile 已内置阿里云 apt 源 + 清华 pip 源
+# =============================================================================
+
+services:
+  # ---------- 后端 Flask ----------
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    # 默认仍从本地源码构建。首个公开 GHCR 镜像发布后，可在根 .env 设置
+    # OGS_BACKEND_IMAGE=ghcr.io/orangeservers/orangeserver-backend 并固定版本。
+    image: ${OGS_BACKEND_IMAGE:-orangeserver-backend}:${OGS_BACKEND_TAG:-latest}
+    restart: unless-stopped
+    networks:
+      - ogs-internal
+    env_file:
+      - ../backend/.env
+    environment:
+      OGS_ENV: prod
+      OGS_BIND_HOST: 0.0.0.0
+      OGS_PORT: 28000
+      # REV48 (P0-8): 变量化让 host.docker.internal (模式 B) 可覆盖 compose 硬编码
+      OGS_MYSQL_HOST: ${OGS_MYSQL_HOST:-mysql}
+      OGS_MYSQL_PORT: ${OGS_MYSQL_PORT:-3306}
+      OGS_MYSQL_DBNAME: ${OGS_MYSQL_DBNAME:-orange}
+      OGS_MYSQL_USER: ${OGS_MYSQL_USER:-app_user}
+      OGS_MYSQL_PASSWORD: ${OGS_MYSQL_PASSWORD}
+      OGS_REDIS_HOST: ${OGS_REDIS_HOST:-redis}
+      OGS_REDIS_PORT: ${OGS_REDIS_PORT:-6379}
+      OGS_REDIS_PASSWORD: ${OGS_REDIS_PASSWORD:-}
+      # REV48 (P1-12): 试运行改 false, Secure cookie 不被写入 HTTP; 正式生产用 LB/nginx 终止 TLS 后改回 true
+      OGS_HTTPS: "${OGS_HTTPS:-false}"
+    depends_on:
+      # bundled 模式: 等 redis/mysql healthy 后再起 backend (test_03 要求)
+      # host 模式: required: false, --profile host 不启 redis/mysql 也不阻塞
+      redis:
+        condition: service_healthy
+        required: false
+      mysql:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:28000/local/health', timeout=2); exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    expose:
+      - "28000"
+    # REV49: extra_hosts 仅在 host 模式需要, bundled 模式删除
+    # 模式 B (host.docker.internal) 请用 deploy/docker-compose.host.yml 覆盖
+
+    # REV48 (P1-6): data 卷持久化, 防 docker compose up 重建丢 SSH 私钥/头像/上传文件/日志
+    volumes:
+      - backend-data:/app/data
+
+  # ---------- 前端 nginx ----------
+  frontend:
+    # ⓘ 锁镜像版本 + SHA digest 防止上游更新引入不兼容变更
+    # REV49: 去掉 -alpine3.20 具体版本后缀, 用 -alpine 自动匹配官方 Alpine 版本
+    image: nginx:1.25-alpine
+    # ⓘ 前端是 pre-build 产物: 部署前需在开发者机器 / CI 跑 `make build-frontend`
+    #   输出 frontend/dist/ (2-3 MB 静态文件), 这里用 nginx:alpine 直接 serve
+    #   部署机不需要装 node/npm
+    #   失败模式: dist/ 不存在时挂载空目录, nginx 容器起不来
+    restart: unless-stopped
+    networks:
+      - ogs-internal
+    ports:
+      # REV49: 端口变量化, 默认 8080 (避免与 Harbor/其他服务抢占 80/443)
+      - "${OGS_HTTP_PORT:-8080}:80"
+    volumes:
+      # REV48 (P0-9.1): 用容器版 nginx 配置 (frontend_container.conf), upstream=backend:28000 (不是 127.0.0.1)
+      #          覆盖默认 server (default.conf), 防 listen 80 抢占
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx/frontend_container.conf:/etc/nginx/conf.d/default.conf:ro
+      # REV48 (P0-4): 公共反代参数 include (proxy_http_version 等)
+      - ./nginx/ogs_proxy_common.conf:/etc/nginx/ogs_proxy_common.conf:ro
+    depends_on:
+      - backend
+
+  # ---------- Redis ----------
+  # ⓘ profiles: ['bundled'] 标记: 默认 --profile bundled 才启
+  #   本机有 redis 时, 用 `docker compose up -d backend frontend` (不起 redis/mysql) +
+  #   backend OGS_REDIS_HOST=host.docker.internal 连本机
+  redis:
+    # ⓘ 锁镜像版本 + SHA digest
+    # REV49: 去掉 -alpine3.21 具体版本后缀
+    image: redis:7.4-alpine
+    profiles: ["bundled"]
+    # REV48 (P0-10): 注入 OGS_REDIS_PASSWORD 到容器, 让 backend 配的密码真生效
+    environment:
+      OGS_REDIS_PASSWORD: ${OGS_REDIS_PASSWORD:-}
+    restart: unless-stopped
+    networks:
+      - ogs-internal
+    # ⓘ 修复: 启用 requirepass (与 OGS_REDIS_PASSWORD 一致) - REV46-H12 防未授权访问
+    #   命令行密码含特殊字符会破, 用 --requirepass "$PASSWORD" 仍要小心
+    #   安全: 走 docker secrets 或 OGS_REDIS_PASSWORD 文件 (参见生产部署文档)
+    command: >
+      sh -c "if [ -n \"$$OGS_REDIS_PASSWORD\" ]; then
+                redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass \"$$OGS_REDIS_PASSWORD\";
+              else
+                echo '[WARN] OGS_REDIS_PASSWORD 未设, Redis 启无密码模式 (仅限 dev)';
+                redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru;
+              fi"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "if [ -n \"$$OGS_REDIS_PASSWORD\" ]; then redis-cli -a \"$$OGS_REDIS_PASSWORD\" ping | grep PONG; else redis-cli ping | grep PONG; fi"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------- MySQL ----------
+  # ⓘ profiles: ['bundled'] 标记: 默认 --profile bundled 才启
+  #   本机有 mysql 时, 用 `docker compose up -d backend frontend` (不起 redis/mysql) +
+  #   backend OGS_MYSQL_HOST=host.docker.internal 连本机
+  mysql:
+    # ⓘ 锁镜像版本
+    image: mysql:8.0.42
+    profiles: ["bundled"]
+    restart: unless-stopped
+    networks:
+      - ogs-internal
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${OGS_MYSQL_DBNAME:-orange}
+      MYSQL_USER: ${OGS_MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${OGS_MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-authentication-plugin=caching_sha2_password
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../backend/mysqldir/orange.sql:/docker-entrypoint-initdb.d/orange.sql:ro
+    # ⓘ 修复: healthcheck 用 MYSQL_PWD 环境变量传密码, 避免 -p${...} 拼命令行被特殊字符（! & ;）破
+    healthcheck:
+      test: ["CMD", "sh", "-c", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -u root"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  ogs-internal:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  # REV48 (P1-6): backend 运行时数据 (SSH 私钥 / 头像 / 上传 / 日志) 持久化
+  backend-data:
+    driver: local

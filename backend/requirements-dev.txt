@@ -1,0 +1,35 @@
+# OrangeServer 开发/审计依赖（不参与生产部署）
+# =============================================================================
+# 安装: pip install -r requirements-dev.txt
+# 用途:
+#   - pip-tools: pip-compile 锁定 / pip-sync 同步
+#   - pip-audit: 依赖漏洞扫描（CVE 库）
+#   - bandit:    Python AST 静态安全扫描
+#   - pytest:   单元测试框架
+#   - safety:   另一款依赖漏洞扫描（与 pip-audit 二选一）
+#   - flake8:   PEP8 / pyflakes 风格检查
+# =============================================================================
+
+# 依赖锁定与同步
+pip-tools>=7.4
+pip-audit>=2.7
+
+# 安全审计
+bandit>=1.7
+safety>=3.0
+
+# 测试
+pytest>=8.0
+pytest-cov>=5.0
+pytest-mock>=3.12
+pytest-timeout>=2.3  # 防单测 deadlock 拉满 CI timeout (ti2-CI)
+
+# 代码风格
+flake8>=7.0
+flake8-bugbear>=24.0
+
+# 类型检查 (ti3-HINT)
+mypy>=1.10
+
+# 调试 / 追踪
+ipython>=8.0

@@ -1,0 +1,1 @@
+var e=/admin|超管|管理员|ops|prod|prd|生产|线上|master|主库|formal/,t=/audit|审计|log|日志|stag|stg|预发|灰度|gray/,n=/dev|研发|开发|test|测试|qa|sandbox/,r=/cache|redis|mq|kafka|nginx|中间件|中间|db|数据库/;function i(i){if(!i)return`is-other`;let a=String(i).toLowerCase();return e.test(a)?`is-prod`:t.test(a)?`is-staging`:n.test(a)?`is-test`:r.test(a)?`is-cache`:`is-other`}export{i as t};

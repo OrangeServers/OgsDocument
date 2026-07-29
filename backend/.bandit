@@ -1,0 +1,34 @@
+# OrangeServer bandit config (ti2-CI)
+# 文件格式: YAML
+# 用法: bandit -c .bandit -r app/ init.py
+#
+# 跳过规则 (业务设计选择, 不修):
+#   B101: assert_used
+#   B104: hardcoded_bind_all_interfaces (gunicorn 0.0.0.0)
+#   B108: hardcoded_tmp_directory (/tmp Linux 部署约定)
+#   B311: random (业务无密码学需求, secrets 已用于安全场景)
+#   B404: import_subprocess
+#   B601: paramiko_calls (SSH 命令是核心能力, 上游已加 shlex.quote)
+#   B603: subprocess_without_shell_equals_true (sendmail/shellcmd/cron)
+#
+# 不跳过但关注:
+#   B324: hashlib weak SHA1 (user.py:299 已用 usedforsecurity=False 修)
+#
+# 排除目录 (与 pytest CI 一致):
+#   tests / data / _archive / app/tools/ansible_runner / frontend
+
+skips:
+  - B101
+  - B104
+  - B108
+  - B311
+  - B404
+  - B601
+  - B603
+
+exclude_dirs:
+  - tests
+  - data
+  - _archive
+  - app/tools/ansible_runner
+  - frontend

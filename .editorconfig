@@ -1,0 +1,39 @@
+# =============================================================================
+# EditorConfig — 统一前后端代码风格
+# =============================================================================
+# 参考：https://editorconfig.org/
+# 与 ruff / eslint / Prettier 协同工作
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Python（PEP 8）
+[*.py]
+indent_size = 4
+max_line_length = 120
+
+# JavaScript / TypeScript / Vue / JSON / YAML
+[*.{js,ts,vue,json,yaml,yml}]
+indent_size = 2
+
+# Markdown（保留尾部空格用于换行）
+[*.md]
+trim_trailing_whitespace = false
+
+# Shell 脚本
+[*.{sh,bash}]
+indent_size = 2
+
+# Dockerfile
+[Dockerfile]
+indent_size = 4
+
+# Makefile（必须用 Tab）
+[Makefile]
+indent_style = tab

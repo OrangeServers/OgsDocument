@@ -1,0 +1,55 @@
+# OrangeServer 顶层依赖（pip-tools 风格）
+# =============================================================================
+# 用法（生成可锁定的 requirements.txt + hash）：
+#   pip install pip-tools
+#   pip-compile requirements.in            # 生成 requirements.txt
+#   pip-compile requirements.in --generate-hashes   # 生成带 hash 的 (推荐生产)
+#   pip-sync requirements.txt              # 同步环境到 requirements.txt 一致
+# =============================================================================
+# 业务侧只声明顶层 + 最小版本号（>= 或 ~=），具体小版本由 pip-compile 解析得出
+# 注：本文件与 requirements.txt 同步；本文件只描述"我们用什么"，requirements.txt
+#     描述"具体装什么版本"。一旦 lock 住，requirements.txt 是真理源。
+
+# --- Web framework ---------------------------------------------------------
+Flask>=3.1
+Werkzeug>=3.1
+Flask-SQLAlchemy>=3.1
+
+# --- Async / WSGI ---------------------------------------------------------
+gevent>=26.5
+gevent-websocket>=0.10
+gunicorn>=26.0
+
+# --- Database / Cache -----------------------------------------------------
+SQLAlchemy>=2.0
+PyMySQL>=1.2
+redis>=5.3
+
+# --- SSH / Remote ---------------------------------------------------------
+paramiko>=3.5,<5.0  # 5.x 移除了 ssh-rsa (SHA-1) 支持，与旧版 OpenSSH 不兼容
+
+# --- Scheduling -----------------------------------------------------------
+APScheduler>=3.11
+pytz>=2026.2
+
+# --- Security -------------------------------------------------------------
+bcrypt>=5.0
+# DEP-1: 显式声明隐藏依赖 cryptography
+#   业务侧 import: app/tools/basesec.py 的 Fernet
+#   之前未声明 → 依赖 pip 自动装最新版 → 不可控
+cryptography>=46.0
+
+# --- Image / Misc ---------------------------------------------------------
+captcha>=0.7               # 验证码图片生成（字符扭曲 + 弧线干扰 + 噪点）
+pillow>=12.0
+psutil>=7.0
+
+# --- Config / Env loading ------------------------------------------------
+python-dotenv>=1.0
+
+# --- LLM Provider (OpenAI-compatible APIs) -------------------------------
+openai>=2.46,<3
+
+# --- Automation (Ansible) -------------------------------------------------
+# 历史注释里的 ansible~=4.10.0 是错的（4.x 已 EOL），必须装 ansible-core
+ansible-core>=2.18
