@@ -54,6 +54,7 @@ Thumbs.db
 
 # ---------- 环境与密钥（绝不进 git）----------
 .env
+.env.dev
 .env.local
 .env.*.local
 !.env.example

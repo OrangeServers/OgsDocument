@@ -227,11 +227,49 @@ else
     warn "ss/netstat 不可用, 跳过端口检查"
 fi
 
+# 宽泛的 ip_local_port_range 可能把公开服务端口分配给出站连接。即使没有进程
+# LISTEN，残留 TIME_WAIT 也会让 Docker userland proxy 绑定失败。
+if [ -r /proc/sys/net/ipv4/ip_local_port_range ]; then
+    read -r EPHEMERAL_LOW EPHEMERAL_HIGH \
+        < /proc/sys/net/ipv4/ip_local_port_range
+    if [ "${HTTP_PORT_VALUE}" -ge "${EPHEMERAL_LOW}" ] \
+        && [ "${HTTP_PORT_VALUE}" -le "${EPHEMERAL_HIGH}" ]; then
+        RESERVED_PORTS=""
+        [ -r /proc/sys/net/ipv4/ip_local_reserved_ports ] \
+            && RESERVED_PORTS=$(cat /proc/sys/net/ipv4/ip_local_reserved_ports)
+        PORT_RESERVED=0
+        OLD_IFS="${IFS}"
+        IFS=','
+        for range in ${RESERVED_PORTS}; do
+            case "${range}" in
+                *-*)
+                    range_low="${range%-*}"
+                    range_high="${range#*-}"
+                    if [ "${HTTP_PORT_VALUE}" -ge "${range_low}" ] \
+                        && [ "${HTTP_PORT_VALUE}" -le "${range_high}" ]; then
+                        PORT_RESERVED=1
+                    fi
+                    ;;
+                "${HTTP_PORT_VALUE}")
+                    PORT_RESERVED=1
+                    ;;
+            esac
+        done
+        IFS="${OLD_IFS}"
+        if [ "${PORT_RESERVED}" = "1" ]; then
+            ok "端口 ${HTTP_PORT_VALUE} 已从临时出站端口范围保留"
+        else
+            fail "端口 ${HTTP_PORT_VALUE} 位于临时出站端口范围 ${EPHEMERAL_LOW}-${EPHEMERAL_HIGH}, 且未配置 ip_local_reserved_ports"
+            warn "先把 ${HTTP_PORT_VALUE} 合并进 net.ipv4.ip_local_reserved_ports, 等待现有 TIME_WAIT 释放后再启动"
+        fi
+    fi
+fi
+
 # =============================================================================
 echo ">>> 9/10 Shell 环境变量覆盖检查"
 # =============================================================================
 # Compose 插值时 shell env 优先于 --env-file, 防止已 export 的旧值覆盖
-OVERRIDE_VARS="OGS_MYSQL_PASSWORD OGS_REDIS_PASSWORD MYSQL_ROOT_PASSWORD OGS_HTTP_PORT"
+OVERRIDE_VARS="OGS_MYSQL_PASSWORD OGS_REDIS_PASSWORD MYSQL_ROOT_PASSWORD OGS_HTTP_PORT OGS_BACKEND_IMAGE OGS_BACKEND_TAG"
 OVERRIDE_FOUND=0
 for v in ${OVERRIDE_VARS}; do
     if [ -n "${!v:-}" ]; then

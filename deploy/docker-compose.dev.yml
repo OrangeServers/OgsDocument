@@ -1,39 +1,143 @@
 # =============================================================================
-# OrangeServer docker-compose — 开发模式覆盖 (REV48/REV49)
+# OrangeServer 全容器开发环境
 # =============================================================================
-# 与 deploy/docker-compose.yml 叠加使用:
-#   make docker-dev-up
-#   或: docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
-# 作用:
-#   - 挂载本地源码 (volume bind), 无需重建镜像即可热更新
-#   - 暴露后端 28000 端口供本地调试
-#   - MySQL / Redis 用本地已运行实例 (host.docker.internal 走 host-gateway)
-#
-# REV48 修复 (P1-3):
-#   - command 加 --host 0.0.0.0 (init.py 默认 127.0.0.1, 宿主机访问 28000 必失败)
-#   - OGS_BIND_HOST env 不读 (init.py 只认命令行 --host, supervisor 用 gunicorn -b)
-#   - 删 version: '3.8' (新 compose 会告警)
-# REV49: 加 extra_hosts (REV49 从基础 compose 中删除了, dev 模式需要)
+# - 独立 MySQL / Redis / backend / Vite frontend，不复用生产或旧开发卷
+# - backend、frontend 源码 bind mount；Python 改动由 gunicorn --reload 重载，
+#   前端改动由 Vite HMR 生效
+# - 首次运行 `make docker-dev-up` 会生成权限受限的 .env.dev
 # =============================================================================
 
+name: ${COMPOSE_PROJECT_NAME:-orangeserver_dev}
+
 services:
-  backend:
-    build: {}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  mysql:
+    image: mysql:8.0.42
+    restart: unless-stopped
+    networks:
+      - dev-internal
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${OGS_MYSQL_DBNAME:-orange}
+      MYSQL_USER: ${OGS_MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${OGS_MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-authentication-plugin=caching_sha2_password
     volumes:
-      - ../backend:/app
-      - /app/__pycache__
-      - /app/.pytest_cache
-    ports:
-      - "28000:28000"
+      - dev-mysql-data:/var/lib/mysql
+      - ../backend/mysqldir/orange.sql:/docker-entrypoint-initdb.d/00-orange.sql:ro
+    healthcheck:
+      test: ["CMD", "sh", "-c", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -u root"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    networks:
+      - dev-internal
+    environment:
+      OGS_REDIS_PASSWORD: ${OGS_REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - exec redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass "$$OGS_REDIS_PASSWORD"
+    volumes:
+      - dev-redis-data:/data
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -a \"$$OGS_REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    image: ${OGS_DEV_BACKEND_IMAGE:-ghcr.io/orangeservers/orangeserver-backend}:${OGS_DEV_BACKEND_TAG:-v1.0.1}
+    pull_policy: missing
+    restart: unless-stopped
+    networks:
+      - dev-internal
+    env_file:
+      - ../.env.dev
     environment:
       OGS_ENV: dev
+      OGS_BIND_HOST: 0.0.0.0
+      OGS_PORT: 28000
+      OGS_MYSQL_HOST: mysql
+      OGS_MYSQL_PORT: 3306
+      OGS_REDIS_HOST: redis
+      OGS_REDIS_PORT: 6379
       OGS_HTTPS: "false"
-      OGS_MYSQL_HOST: ${OGS_MYSQL_HOST:-host.docker.internal}
-      OGS_REDIS_HOST: ${OGS_REDIS_HOST:-host.docker.internal}
+      OGS_PROXY_LAYERS: "1"
+      # 开发环境会频繁连接临时主机；生产编排仍默认 reject。
+      OGS_SSH_HOST_KEY_POLICY: auto
     command:
-      - python
-      - init.py
-      - --host
-      - "0.0.0.0"
+      - sh
+      - -c
+      - >-
+        exec gunicorn --workers 1
+        --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+        --worker-connections 1000 --bind 0.0.0.0:28000
+        --timeout 60 --keep-alive 5 --reload
+        --no-control-socket
+        --access-logfile - --error-logfile - --log-level info wsgi:app
+    ports:
+      - "${OGS_DEV_BACKEND_PORT:-28001}:28000"
+    volumes:
+      - ../backend:/app
+      - dev-backend-data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:28000/local/health', timeout=2); exit(0 if r.status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  frontend:
+    image: node:22-bookworm-slim
+    restart: unless-stopped
+    working_dir: /app
+    networks:
+      - dev-internal
+    environment:
+      VITE_API_TARGET: http://backend:28000
+      # 留空即使用当前页面同源的 /local WebSocket，由 Vite 转发到 backend。
+      VITE_WS_URL: ""
+    command:
+      - sh
+      - -c
+      - npm ci && exec npm run dev -- --host 0.0.0.0
+    ports:
+      - "${OGS_DEV_HTTP_PORT:-8081}:5173"
+    volumes:
+      - ../frontend:/app
+      - dev-frontend-node-modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+
+networks:
+  dev-internal:
+    driver: bridge
+
+volumes:
+  dev-mysql-data:
+  dev-redis-data:
+  dev-backend-data:
+  dev-frontend-node-modules:

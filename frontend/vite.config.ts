@@ -34,10 +34,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 只代理 HTTP 请求，WebSocket 开发环境直连后端（Vite 8.x 的 WS 代理不转发升级请求）
+      // 开发容器使用同源 WebSocket，Vite 将 Upgrade 请求转发给 backend。
       '^/local(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true,
+        changeOrigin: false,
+        ws: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             const ip = (req.socket?.remoteAddress || '127.0.0.1').replace('::ffff:', '')
@@ -51,28 +52,28 @@ export default defineConfig({
       },
       '^/server(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
       '^/account(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
       '^/mail(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
       '^/auth(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
       '^/ai(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
       // SETUP-WIZARD: 首次部署向导 API
       '^/setup/api(?:/|$)': {
         target: API_SERVER,
-        changeOrigin: true
+        changeOrigin: false
       },
     }
   }

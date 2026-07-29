@@ -82,6 +82,68 @@ foreach ($file in $publicMarkdown) {
     }
 }
 
+$daemonExamplePath = Join-Path $repoRoot 'deploy/daemon.json.example'
+try {
+    $daemonExample = Get-Content -LiteralPath $daemonExamplePath -Raw |
+        ConvertFrom-Json
+    $allowedDaemonKeys = @(
+        'registry-mirrors',
+        'max-concurrent-downloads',
+        'log-driver',
+        'log-opts'
+    )
+    foreach ($property in $daemonExample.PSObject.Properties.Name) {
+        if ($property -notin $allowedDaemonKeys) {
+            $errors.Add(
+                "deploy/daemon.json.example: unsupported example key: $property"
+            )
+        }
+    }
+} catch {
+    $errors.Add('deploy/daemon.json.example: invalid JSON')
+}
+
+$launcherEntrypoints = @(
+    'README.md',
+    'README.zh-CN.md',
+    'website/guide/getting-started.md',
+    'website/zh/guide/getting-started.md',
+    'website/.vitepress/theme/components/HomeCta.vue',
+    'website/.vitepress/theme/components/HeroExtras.vue'
+)
+foreach ($relativePath in $launcherEntrypoints) {
+    $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    if ($content -notmatch 'bootstrap-compose\.sh') {
+        $errors.Add("$relativePath`: missing versioned launcher entrypoint")
+    }
+    if ($content -match 'git clone[^\r\n]*OrangeServer') {
+        $errors.Add("$relativePath`: stale source-build primary entrypoint")
+    }
+    $releaseVersion = [regex]::Match(
+        $content,
+        'releases/download/(?<version>v\d+\.\d+\.\d+)/bootstrap-compose\.sh'
+    ).Groups['version'].Value
+    $argumentVersion = [regex]::Match(
+        $content,
+        '--version\s+(?<version>v\d+\.\d+\.\d+)'
+    ).Groups['version'].Value
+    if (
+        [string]::IsNullOrWhiteSpace($releaseVersion) -or
+        $releaseVersion -ne $argumentVersion
+    ) {
+        $errors.Add("$relativePath`: launcher URL and --version do not match")
+    }
+}
+
+$upgradeContent = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'docs/operations/UPGRADE.md'
+) -Raw
+if ($upgradeContent -match '127\.0\.0\.1:28000/local/health') {
+    $errors.Add(
+        'docs/operations/UPGRADE.md: Compose health check uses unpublished backend port'
+    )
+}
+
 if ($errors.Count -gt 0) {
     $errors | Sort-Object -Unique | ForEach-Object {
         Write-Host $_ -ForegroundColor Red

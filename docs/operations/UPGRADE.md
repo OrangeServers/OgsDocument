@@ -33,23 +33,84 @@ test -s orangeserver-before-upgrade.sql
 
 备份文件包含凭据和业务数据，应加密保存且禁止提交 Git。
 
-## 2. 获取并构建目标版本
+## 2. 准备目标版本
+
+先判断安装类型：
+
+- 源码检出目录包含 `.git/`，使用“源码检出”路径；
+- 一键 Release 安装目录包含 `.orangeserver-version` 且没有 `.git/`，使用
+  “Release bundle”路径。不要对这种目录执行 `git pull`，也不要重新运行首次安装
+  引导器；引导器会为保护已有数据而拒绝覆盖。
+
+### 源码检出
 
 ```bash
 git fetch --tags origin
-git pull --ff-only
+git switch --detach vX.Y.Z
 ```
 
-Docker Compose：
+Docker Compose 源码部署需要构建目标镜像：
 
 ```bash
 make build-backend
 ```
 
+### Release bundle 安装
+
+下载目标版本的 bundle 和校验文件，解压到与当前安装目录同一文件系统的暂存目录。
+下面命令不会覆盖当前安装；把 `vX.Y.Z` 替换为目标稳定版本。安装时使用过
+`--install-dir` 的实例，也必须把每个代码块开头的 `install_dir` 改为同一个实际
+路径：
+
+```bash
+target_version=vX.Y.Z
+install_dir=/opt/orangeserver
+next_dir="${install_dir}-next-${target_version}"
+work_dir="$(mktemp -d)"
+
+test -f "${install_dir}/.orangeserver-version"
+test ! -e "${next_dir}"
+
+curl -fsSL --retry 3 -o "${work_dir}/bundle.tar.gz" \
+  "https://github.com/OrangeServers/OrangeServer/releases/download/${target_version}/orangeserver-deploy-${target_version}.tar.gz"
+curl -fsSL --retry 3 -o "${work_dir}/bundle.tar.gz.sha256" \
+  "https://github.com/OrangeServers/OrangeServer/releases/download/${target_version}/orangeserver-deploy-${target_version}.tar.gz.sha256"
+
+# 校验文件记录的是正式文件名，先恢复该文件名再验证。
+mv "${work_dir}/bundle.tar.gz" \
+  "${work_dir}/orangeserver-deploy-${target_version}.tar.gz"
+mv "${work_dir}/bundle.tar.gz.sha256" \
+  "${work_dir}/orangeserver-deploy-${target_version}.tar.gz.sha256"
+(cd "${work_dir}" && sha256sum -c "orangeserver-deploy-${target_version}.tar.gz.sha256")
+
+tar -C "${work_dir}" -xzf \
+  "${work_dir}/orangeserver-deploy-${target_version}.tar.gz"
+mv "${work_dir}/orangeserver" "${next_dir}"
+cp -p "${install_dir}/.env" "${next_dir}/.env"
+cp -p "${install_dir}/backend/.env" "${next_dir}/backend/.env"
+sed -i "s/^OGS_BACKEND_TAG=.*/OGS_BACKEND_TAG=${target_version}/" "${next_dir}/.env"
+printf '%s\n' "${target_version}" > "${next_dir}/.orangeserver-version"
+chmod 600 "${next_dir}/.env" "${next_dir}/backend/.env" \
+  "${next_dir}/.orangeserver-version"
+rm -rf -- "${work_dir}"
+```
+
+目标 bundle 包含 `CHANGELOG.md`、本文和数据库迁移 SQL。先比较当前
+`.orangeserver-version` 与目标版本说明，只执行跨越版本所要求的迁移。
+
 不要先删除旧镜像。保留一个已验证的应用镜像作为回滚点；具体标签和环境路径只
 记录在部署方私有运维系统中。
 
 ## 3. 按顺序执行迁移
+
+先停止会写业务数据的前后端，保持 bundled MySQL/Redis 运行：
+
+```bash
+install_dir=/opt/orangeserver
+cd "${install_dir}"
+docker compose --env-file .env -f deploy/docker-compose.yml \
+  --profile bundled stop frontend backend
+```
 
 对尚未启用 AI Provider 和受控诊断的旧实例，依次执行：
 
@@ -83,7 +144,24 @@ cd backend
 python -m app.tools.migrate_comma_to_junction
 ```
 
+上面的 Python 迁移只适用于包含完整后端源码的检出目录；Release bundle 不含
+`backend/app`，不要在 bundle 安装上运行。需要跨越该旧迁移的 bundle 用户应先在
+副本环境验证并使用对应版本发布说明提供的容器化迁移入口。
+
 不要在不了解起始 schema 的情况下批量运行全部历史 SQL。
+
+bundled MySQL 可使用下面的形式执行目标 bundle 中明确要求的单个迁移；不要把
+通配符直接交给生产数据库：
+
+```bash
+install_dir=/opt/orangeserver
+next_dir="${install_dir}-next-vX.Y.Z"
+docker compose --env-file "${install_dir}/.env" \
+  -f "${install_dir}/deploy/docker-compose.yml" \
+  --profile bundled exec -T mysql \
+  sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -u root "$MYSQL_DATABASE"' \
+  < "${next_dir}/backend/mysqldir/<required-migration>.sql"
+```
 
 ## 4. 验证数据库
 
@@ -121,14 +199,28 @@ ORDER BY provider_code;
 Docker Compose：
 
 ```bash
-make docker-up
-docker compose --env-file .env -f deploy/docker-compose.yml ps
+# Release bundle 安装：迁移成功后原子切换目录，保留旧目录作为应用回滚点。
+target_version=vX.Y.Z
+install_dir=/opt/orangeserver
+old_version="$(cat "${install_dir}/.orangeserver-version")"
+next_dir="${install_dir}-next-${target_version}"
+rollback_dir="${install_dir}-rollback-${old_version}"
+test ! -e "${rollback_dir}"
+mv "${install_dir}" "${rollback_dir}"
+mv "${next_dir}" "${install_dir}"
+
+cd "${install_dir}"
+make docker-up-image
+make docker-ps
+
+# 源码检出安装仍使用：
+# make docker-up
 ```
 
 基础检查：
 
 ```bash
-curl --fail http://127.0.0.1:28000/local/health
+make docker-health
 ```
 
 浏览器验证：
@@ -151,6 +243,10 @@ curl --fail http://127.0.0.1:28000/local/health
 - 如果旧应用不能识别新 schema，停止写入后恢复升级前 MySQL 备份。
 - rev48/rev49/rev50 不提供自动 down migration；不要在生产手工删除列或表。
 - 恢复数据库前先保留失败现场的日志和当前数据库快照。
+- Release bundle 安装可停止前后端，将当前安装目录移回
+  `<安装目录>-next-<failed-version>`，再把保留的
+  `<安装目录>-rollback-<old-version>` 恢复为原安装目录，最后执行旧目录中的
+  `make docker-up-image`。若迁移不向后兼容，必须同时恢复升级前数据库备份。
 
 MySQL 恢复示例：
 

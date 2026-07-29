@@ -7,7 +7,7 @@ const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
 const cmd =
-  'git clone https://github.com/OrangeServers/OrangeServer.git\ncd OrangeServer && make docker-up'
+  'curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1'
 
 async function copy() {
   try {
@@ -44,17 +44,16 @@ onMounted(() => {
   <section ref="root" class="home-cta" :class="{ armed, shown }">
     <div class="cta-glow"></div>
     <div class="cta-inner">
-      <h2 class="cta-title">{{ isZh ? '60 秒跑起来' : 'Up and running in 60 seconds' }}</h2>
+      <h2 class="cta-title">{{ isZh ? '从全新安装开始' : 'Start from a fresh install' }}</h2>
       <p class="cta-sub">
         {{
           isZh
-            ? 'Docker Compose 一键起栈，首次启动由网页向导完成建库与初始化。'
-            : 'One Docker Compose command. The first-run web wizard handles schema and setup.'
+            ? '固定版本引导器启动 Docker Compose；首次网页向导创建管理员并完成初始化。'
+            : 'The version-pinned launcher starts Docker Compose; the first-run web wizard creates the administrator and completes setup.'
         }}
       </p>
       <div class="cta-cmd">
-        <pre><span class="ps">$</span> git clone https://github.com/OrangeServers/OrangeServer.git
-<span class="ps">$</span> cd OrangeServer && make docker-up</pre>
+        <pre><span class="ps">$</span> curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.1/bootstrap-compose.sh | sudo bash -s -- --version v1.0.1</pre>
         <button class="copy-btn" :class="{ ok: copied }" @click="copy">
           {{ copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy' }}
         </button>

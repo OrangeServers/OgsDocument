@@ -22,7 +22,7 @@
 #   部署机只挂载 frontend/dist/，不再跑 npm build
 # =============================================================================
 
-.PHONY: help install dev dev-backend dev-frontend build build-frontend build-backend test lint health docker-up docker-up-image docker-up-host docker-down docker-ps docker-logs docker-health setup-token docker-check docs-check clean
+.PHONY: help install dev dev-backend dev-frontend build build-frontend build-backend test lint health docker-up docker-up-image docker-up-host docker-down docker-ps docker-logs docker-health setup-token docker-check docs-check docker-dev-init docker-dev-up docker-dev-down docker-dev-reset docker-dev-ps docker-dev-logs clean
 
 # 路径 (REV49: 用 abspath 解析 Makefile 所在目录, 不依赖 pwd/cwd)
 ROOT     := $(abspath $(dir $(firstword $(MAKEFILE_LIST))))
@@ -34,6 +34,9 @@ OPS      := $(ROOT)/ops
 # REV49: --env-file 指定根 .env (变量替换), -f 指定 compose 文件
 #        不使用 --project-directory (会破坏 ../backend 等相对路径基准)
 COMPOSE  := docker compose --env-file "$(ROOT)/.env" -f "$(DEPLOY)/docker-compose.yml"
+# 镜像入口只信任受权限保护的根 .env，避免调用者已 export 的旧 tag 静默覆盖。
+IMAGE_COMPOSE := env -u OGS_BACKEND_IMAGE -u OGS_BACKEND_TAG $(COMPOSE)
+DEV_COMPOSE := env -u COMPOSE_PROJECT_NAME -u OGS_DEV_BACKEND_IMAGE -u OGS_DEV_BACKEND_TAG docker compose --env-file "$(ROOT)/.env.dev" -f "$(DEPLOY)/docker-compose.dev.yml"
 
 help: ## 显示帮助
 	@echo "OrangeServer 一站式构建入口"
@@ -104,8 +107,8 @@ docker-up-image: docker-check ## 拉取已发布后端镜像并启动 (公开发
 		echo "[FAIL] OGS_BACKEND_TAG 必须固定为稳定版本 (例如 v1.2.3)，禁止 latest"; \
 		exit 1; \
 	fi
-	$(COMPOSE) --profile bundled pull
-	$(COMPOSE) --profile bundled up -d --no-build
+	$(IMAGE_COMPOSE) --profile bundled pull
+	$(IMAGE_COMPOSE) --profile bundled up -d --no-build
 	@echo "[OK] 已使用预构建后端镜像启动，查看 make docker-ps"
 
 # DEPLOY-AUDIT P1-1: host 模式 (外部 MySQL/Redis) 需要叠加 host.yml 提供
@@ -118,8 +121,24 @@ docker-up-host: ## docker compose 启动 (host 模式, 连接外部 MySQL/Redis)
 docker-down: ## docker compose 停止
 	$(COMPOSE) down
 
-docker-dev-up: ## docker compose 启动 (开发模式, 挂载源码)
-	$(COMPOSE) -f "$(DEPLOY)/docker-compose.dev.yml" up
+docker-dev-init: ## 首次生成全容器开发环境配置 (.env.dev)
+	@bash "$(OPS)/init-dev-env.sh"
+
+docker-dev-up: docker-dev-init ## 启动独立全容器开发环境 (源码映射 + Vite HMR)
+	$(DEV_COMPOSE) up -d --wait --wait-timeout 180
+	@echo "[OK] 开发环境已启动: http://127.0.0.1:$$(sed -n 's/^OGS_DEV_HTTP_PORT=//p' "$(ROOT)/.env.dev")"
+
+docker-dev-down: docker-dev-init ## 停止开发环境，保留数据库和依赖卷
+	$(DEV_COMPOSE) down
+
+docker-dev-reset: docker-dev-init ## 重置开发环境（删除该项目的数据库/Redis/运行时卷）
+	$(DEV_COMPOSE) down --volumes --remove-orphans
+
+docker-dev-ps: docker-dev-init ## 查看开发环境容器状态
+	$(DEV_COMPOSE) ps
+
+docker-dev-logs: docker-dev-init ## 跟踪开发环境日志
+	$(DEV_COMPOSE) logs --tail=200 -f
 
 docker-ps: ## docker compose 查看状态
 	$(COMPOSE) --profile bundled ps
