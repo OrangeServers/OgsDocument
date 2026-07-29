@@ -87,7 +87,9 @@ Run 的证据 ID。需要改变主机状态的修复仍必须生成独立审批�
 
 ## 快速开始
 
-要求：Docker Engine、Docker Compose v2 和 `curl`。
+要求：Docker Engine、Docker Compose v2，以及 `curl`、`make`、`openssl`、
+`sed`、`tar`、`sha256sum`、`mktemp`。引导器需要以 root 身份运行（例如通过
+`sudo`）。
 
 ```bash
 curl -fsSL \

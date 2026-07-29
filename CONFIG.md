@@ -135,7 +135,7 @@ mysql -u root -p orange < backend/mysqldir/orange.sql
 | 变量 | 默认值 | 必填 | 说明 |
 |------|--------|------|------|
 | `OGS_REDIS_HOST` | `192.0.2.1`（代码内置 dev 值） | ✅ | Redis 服务器地址，生产必改 |
-| `OGS_REDIS_PORT` | `6389`（代码内置 dev 值） | ✅ | Redis 端口，生产按实际改（标准端口 6379） |
+| `OGS_REDIS_PORT` | `6379`（模板；无模板时代码回退 6389） | ✅ | Redis 端口，生产按实际改 |
 | `OGS_REDIS_PASSWORD` | 空 | 推荐 (prod) | Redis requirepass（生产环境强烈建议配置，防未授权访问） |
 | `OGS_REDIS_DB` | `0` | ❌ | db 索引（默认 0；不建议用 10，业务库隔离走 key prefix） |
 | `OGS_REDIS_MAX_CONNECTIONS` | `10` | ❌ | 连接池上限 |
@@ -153,7 +153,10 @@ mysql -u root -p orange < backend/mysqldir/orange.sql
 | 仅后端 Docker | `host.docker.internal` | `6379` |
 | Kubernetes | `redis.<namespace>.svc.cluster.local` | `6379` |
 
-> ⚠️ 代码内置默认 `OGS_REDIS_HOST=192.0.2.1` / `OGS_REDIS_PORT=6389` 是**占位性质的 dev 默认值**（`192.0.2.1` 是文档保留网段，必然连不上）。**config.py 不对 Redis 做 fail-fast 检查**——这组容易被遗忘，生产前必须按上表改。
+> ⚠️ `backend/.env.example` 使用 `OGS_REDIS_HOST=192.0.2.1` /
+> `OGS_REDIS_PORT=6379`；如果完全不加载模板，代码回退端口才是 `6389`。
+> `192.0.2.1` 是文档保留网段，必然连不上。**config.py 不对 Redis 做
+> fail-fast 检查**——生产前必须按上表改。
 
 > **注意**：OGS_REDIS_DB **默认 0**（不是 10）。如需业务库隔离，推荐用 key prefix（如 `mail_verification:`、`captcha_get_min:`）而不是换 db 索引。
 
@@ -170,7 +173,7 @@ mysql -u root -p orange < backend/mysqldir/orange.sql
 |------|--------|------|------|
 | `OGS_MAIL_USER` | 空 | 部分 | 发件邮箱账号（如 `noreply@company.com`） |
 | `OGS_MAIL_PASSWORD` | 空 | 部分 | SMTP **授权码**（不是登录密码） |
-| `OGS_MAIL_SMTP` | `smtp.example.com` | 部分 | SMTP 服务器域名 |
+| `OGS_MAIL_SMTP` | 空 | 部分 | SMTP 服务器域名 |
 | `OGS_MAIL_PORT` | `587` | ❌ | 587=STARTTLS / 465=SSL / 25=裸连 |
 | `OGS_MAIL_USE_TLS` | `true` | ❌ | STARTTLS 加密（推荐） |
 | `OGS_MAIL_USE_SSL` | `false` | ❌ | SSL 加密（465 端口时启用） |
@@ -222,7 +225,7 @@ rm -rf /, mkfs, dd if=, shutdown, reboot, init 0, init 6, halt, poweroff,
 
 | 变量 | 默认值 | 必填 | 说明 |
 |------|--------|------|------|
-| `OGS_CAPTCHA_GET_LIMIT_MIN` | `30` | ❌ | `CaptchaGet` IP 限流（次/分钟，防 Redis 内存膨胀同时给用户重试余量） |
+| `OGS_CAPTCHA_GET_LIMIT_MIN` | `10`（模板；无模板时代码回退 30） | ❌ | `CaptchaGet` IP 限流（次/分钟，防 Redis 内存膨胀同时给用户重试余量） |
 | `OGS_CAPTCHA_GET_PREFIX_MIN` | `captcha_get_min:` | ❌ | 限流 Redis key 前缀 |
 
 ---
@@ -241,8 +244,8 @@ OGS_CSRF_ALLOWED_ORIGINS=https://app.example.com
 # 多域名
 OGS_CSRF_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 
-# 开发（Vite 5173 跨源访问 28000 后端，Vite proxy changeOrigin=true 改写 Host）
-OGS_CSRF_ALLOWED_ORIGINS=http://127.0.0.1:5173
+# 开发容器由 Vite 同源代理到 backend，并保留浏览器 Host，无需额外 CORS/CSRF Origin。
+OGS_CSRF_ALLOWED_ORIGINS=
 ```
 
 ---
@@ -314,7 +317,7 @@ OGS_REDIS_HOST=redis
 OGS_REDIS_PASSWORD=<Redis requirepass>            # 生产必填
 OGS_REDIS_DB=0
 OGS_HTTPS=true
-OGS_SSH_HOST_KEY_POLICY=auto
+OGS_SSH_HOST_KEY_POLICY=reject
 OGS_CSRF_ALLOWED_ORIGINS=https://your.domain.com
 
 # 可选
@@ -322,7 +325,7 @@ OGS_SESSION_EXP_SECONDS=10800
 OGS_SSH_DANGEROUS_COMMANDS=rm -rf /,mkfs,dd if=,shutdown,reboot
 OGS_LOGIN_FAIL_LIMIT=5
 OGS_LOGIN_FAIL_LIMIT_IP=20
-OGS_CAPTCHA_GET_LIMIT_MIN=30
+OGS_CAPTCHA_GET_LIMIT_MIN=10
 ```
 
 ---

@@ -6,6 +6,8 @@
 
 ## 使用者
 
+- [项目官网](https://orangeservers.github.io/OrangeServer/)：产品总览与快速入口。
+- [官网部署指南](https://orangeservers.github.io/OrangeServer/zh/guide/deployment.html)：固定版本一键安装与部署方式。
 - [批量命令与批量脚本](operations/BATCH_OPERATIONS.md)：配置检查、执行结果、失败重试和能力边界。
 - [AI 运维使用指南](ai/USER_GUIDE.md)：查询、结果集、审批、执行结果和会话。
 - [受控只读诊断](ai/DIAGNOSTICS.md)：固定探针、证据、规则报告和 Runbook。
@@ -15,6 +17,7 @@
 
 ## 管理员
 
+- [官网部署指南](https://orangeservers.github.io/OrangeServer/zh/guide/deployment.html)：普通全新安装入口。
 - [部署手册](../DEPLOY.md)：Docker、物理机和 Kubernetes 部署。
 - [批量操作安全与审计](operations/BATCH_OPERATIONS.md)：权限复核、脚本限制和兼容接口。
 - [统一升级流程](operations/UPGRADE.md)：备份、迁移、验证和回滚。

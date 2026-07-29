@@ -23,7 +23,7 @@ OrangeServer（橘子平台）是一款面向运维场景的资产 / 命令 / �
 | 定时任务 | ✅ | APScheduler 内存调度 + Redis 缓存最新结果 |
 | 日志审计 | ✅ | 登录日志 / 命令日志 / 操作日志（统一 `CzToolsLog` 审计基类） |
 | AI 运维 | ✅ | OpenAI-compatible 模型接入、平台工具调用与批量命令审批 |
-| 系统设置 | ✅ | 安全策略 / 终端 / 审计 / 文件传输 / 通知（21 项可配） |
+| 系统设置 | ✅ | 安全策略 / 终端 / 审计 / 文件传输 / 通知 / 界面语言 |
 | 统计图表 | ✅ | 登录/用户/错误趋势 |
 | 验证码 | ✅ | PIL 图形验证码 + IP 限流（30 次/分钟） |
 
@@ -54,14 +54,14 @@ backend/
 ├── app/
 │   ├── api/                   # 路由注册（ROUTES 声明式）
 │   │   ├── __init__.py
-│   │   ├── account_api.py     # 23 条用户/组/日志路由
-│   │   ├── auth_api.py        # 6 条权限路由
+│   │   ├── account_api.py     # 用户/组/日志路由
+│   │   ├── auth_api.py        # 权限路由
 │   │   ├── local_api.py       # 本地命令/文件路由
-│   │   └── server_api.py      # 23 条服务器资产/SSH路由
+│   │   └── server_api.py      # 服务器资产/SSH路由
 │   ├── core/                  # 基础设施
 │   │   ├── config.py          # 配置加载（OGS_* 环境变量）
 │   │   └── db/
-│   │       ├── database.py    # 18 张表 ORM 模型
+│   │       ├── database.py    # 23 张表 ORM 模型
 │   │       └── settings.py    # SQLAlchemy 实例 + session
 │   ├── audit/                 # 审计日志
 │   │   └── loginlogs.py       # 登录日志查询
@@ -182,7 +182,7 @@ python init.py
 | `t_cron` | 定时任务主表 |
 | `t_cron_host` | 定时 → 主机 |
 | `t_cron_group` | 定时 → 主机组 |
-| `t_settings` | 系统设置（21 列：安全/终端/审计/文件/通知） |
+| `t_settings` | 系统设置（安全/终端/审计/文件/通知/界面语言） |
 
 ### 日志 / 统计表
 
@@ -208,23 +208,32 @@ python init.py
 
 ### 路由注册（ROUTES 声明式）
 
-86 条旧业务路由通过 `app/api/*_api.py` 的 `ROUTES` 列表统一注册（REV38-M1 后使用 `route()` 命名 tuple，统一 6 字段 schema）。AI Agent 因为需要 REST 动词、URL 参数和 POST SSE，由 `app/api/ai_api.py` 单独注册：
+旧业务路由通过 `app/api/*_api.py` 的 `ROUTES` 列表统一注册（REV38-M1 后使用
+`route()` 构造统一的 9 字段 `RouteRule`）。AI Agent 因为需要 REST 动词、
+URL 参数和 POST SSE，由 `app/api/ai_api.py` 单独注册：
 
 ```python
 ROUTES = [
-    ('/account/login_dl2', UserLogin2, 'login_dl', False, False),
-    ('/account/group/list', AccGroupList, 'group_list', True, False),
-    ('/server/host/cmd',   ServerCmd,   'sh_cmd',   True, False),
+    route('/account/login_dl2', UserLogin2, 'login_dl',
+          need_auth=False, is_property=False, skip_csrf=True),
+    route('/account/group/list', AccGroupList, 'group_list',
+          is_property=False, roles=['admin']),
+    route('/server/host/cmd', ServerCmd, 'sh_cmd',
+          description='远程执行 SSH 命令'),
     # ...
 ]
 ```
 
-每条 tuple 字段：
+每条 `RouteRule` 字段：
 1. `URL` - 路径
 2. `Class` - 视图类（必须包含对应 `method` 方法）
 3. `method` - 调用的实例方法名
 4. `need_auth` - 是否需要登录
-5. `property_call` - 是否作为属性调用（兼容早期写法，现统一 False）
+5. `is_property` - 是否作为属性调用
+6. `roles` - 允许角色
+7. `description` - 接口描述
+8. `skip_csrf` - 是否跳过 CSRF（仅公开接口）
+9. `is_alias` - 是否为兼容别名路由
 
 ### AI Agent API
 

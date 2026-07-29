@@ -7,7 +7,7 @@ const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
 const cmd =
-  'git clone https://github.com/OrangeServers/OrangeServer.git\ncd OrangeServer && make docker-up'
+  'curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh | sudo bash -s -- --version v1.0.0'
 
 async function copy() {
   try {
@@ -47,8 +47,7 @@ async function copy() {
       </a>
     </div>
     <div class="install">
-      <pre><span class="ps">$</span> git clone https://github.com/OrangeServers/OrangeServer.git
-<span class="ps">$</span> cd OrangeServer && make docker-up</pre>
+      <pre><span class="ps">$</span> curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh | sudo bash -s -- --version v1.0.0</pre>
       <button
         class="copy"
         :class="{ ok: copied }"

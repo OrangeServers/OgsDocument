@@ -89,7 +89,9 @@ host state still requires a separate approval-gated action. See
 
 ## Quick start
 
-Requirements: Docker Engine with Docker Compose v2 and `curl`.
+Requirements: Docker Engine with Docker Compose v2, `curl`, `make`, `openssl`,
+`sed`, `tar`, `sha256sum`, and `mktemp`. Run the launcher as root (for example
+through `sudo`).
 
 ```bash
 curl -fsSL \

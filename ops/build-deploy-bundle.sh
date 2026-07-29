@@ -46,9 +46,11 @@ trap 'rm -rf -- "$STAGE"' EXIT
 
 required=(
     ".env.example"
+    "CHANGELOG.md"
     "Makefile"
     "backend/.env.example"
     "backend/mysqldir/orange.sql"
+    "docs/operations/UPGRADE.md"
     "deploy/docker-compose.yml"
     "deploy/docker-compose.host.yml"
     "deploy/nginx/frontend_container.conf"
@@ -80,13 +82,16 @@ bundle_root="${STAGE}/orangeserver"
 mkdir -p \
     "${bundle_root}/backend/mysqldir" \
     "${bundle_root}/deploy/nginx" \
+    "${bundle_root}/docs/operations" \
     "${bundle_root}/frontend" \
     "${bundle_root}/ops"
 
 cp "${ROOT}/.env.example" "${bundle_root}/"
+cp "${ROOT}/CHANGELOG.md" "${bundle_root}/"
 cp "${ROOT}/Makefile" "${bundle_root}/"
 cp "${ROOT}/backend/.env.example" "${bundle_root}/backend/"
-cp "${ROOT}/backend/mysqldir/orange.sql" "${bundle_root}/backend/mysqldir/"
+cp "${ROOT}/backend/mysqldir/"*.sql "${bundle_root}/backend/mysqldir/"
+cp "${ROOT}/docs/operations/UPGRADE.md" "${bundle_root}/docs/operations/"
 cp "${ROOT}/deploy/docker-compose.yml" "${bundle_root}/deploy/"
 cp "${ROOT}/deploy/docker-compose.host.yml" "${bundle_root}/deploy/"
 cp "${ROOT}/deploy/nginx/frontend_container.conf" "${bundle_root}/deploy/nginx/"

@@ -1,27 +1,24 @@
 # 快速开始
 
-最快的方式是 Docker Compose。要求：Docker Engine、Docker Compose v2、Git 和 Make。
+推荐使用固定版本的 Docker Compose 引导器。要求：Docker Engine、Docker Compose v2、
+`curl` 与可使用 `sudo` 的权限。
 
 ```bash
-git clone https://github.com/OrangeServers/OrangeServer.git
-cd OrangeServer
-cp .env.example .env
-cp backend/.env.example backend/.env
+curl -fsSL \
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.0/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.0
 ```
 
-修改两个环境文件中的所有 `CHANGE_ME` 并设置生产密钥，然后启动：
+引导器会下载并校验同版本部署包，生成 MySQL 与 Redis 基础设施密码，并启动已发布的
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.0` 镜像。若环境不允许将下载内容
+直接交给 shell，请先下载并审阅引导器。源码部署和复用宿主机服务的部署方式见
+[部署方式](/zh/guide/deployment)。
 
-```bash
-make docker-up
-```
-
-浏览器打开 `http://<服务器地址>:8080`，初始账号和密码均为 `admin`，
-首次登录后必须立即修改密码。
+浏览器打开 `http://<服务器地址>:8080`。系统没有默认管理员账号或密码。
 
 ::: tip 首次部署向导
-如果启动时缺少必需配置（MySQL、密钥、Fernet keys），后端不会崩溃退出，
-而是在 `/setup` 提供网页引导：校验连通性、建库建表、创建管理员账号、
-写入配置并自动重启。
+全新安装时，后端会在 `/setup` 提供网页引导：校验连通性、建库建表、创建管理员账号、
+写入应用配置并自动重启。
 :::
 
 ## 配置 AI 模型服务

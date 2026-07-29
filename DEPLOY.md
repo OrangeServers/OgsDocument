@@ -29,7 +29,8 @@ Redis 基础设施密码，然后调用仓库内的预检与 `make docker-up-ima
 
 ```bash
 # 1. 获取源码 & 配置
-git clone <repo-url> orangeserver && cd orangeserver
+git clone https://github.com/OrangeServers/OrangeServer.git orangeserver
+cd orangeserver
 # 无法访问 GitHub 时，也可以在联网机器下载正式 Release/source tarball，
 # 上传到部署机并解压为 orangeserver/ 后进入该目录。
 cp .env.example .env && cp backend/.env.example backend/.env
@@ -47,6 +48,12 @@ make docker-up
 #    - 后端应用配置未完成时：自动进入 /setup 首次部署配置向导（见下节）
 #      向导中的 SMTP 步骤可跳过；也可在登录后的通知设置中再配置和测试。
 ```
+
+只上传 source tarball 或向引导器传 `--bundle-file`，仅解决部署文件下载，不等于
+完全离线：Compose 仍需要后端、Nginx、Redis、MySQL 镜像。受限网络可在联网机器
+导出固定版本镜像并在部署机用 `docker load` 预置，或使用组织内部 registry。
+当前 `make docker-up-image` 仍会访问 registry 校验/拉取镜像，因此本版本**不承诺
+完全断网安装**；真正 air-gapped 环境还需要专用的离线启动入口和全部镜像清单。
 
 ### 首次部署配置向导（/setup）
 
@@ -78,15 +85,20 @@ make docker-up
 > 前端 `frontend/dist/` 是 pre-build 产物，部署机不需要 node/npm。正式源码包或
 > Release 必须包含该目录；只有开发者修改前端后才需要运行 `make build-frontend`。
 
-> 国内拉镜像超时？配 registry mirror：`sudo cp deploy/daemon.json.example /etc/docker/daemon.json && sudo systemctl restart docker`
+> Docker Hub 拉取 Nginx、Redis、MySQL 超时时，可先合并
+> `deploy/daemon.json.example` 到现有 `/etc/docker/daemon.json`，执行
+> `dockerd --validate --config-file=/etc/docker/daemon.json` 验证后再重启 Docker。
+> 不要直接覆盖已有 daemon 配置。`registry-mirrors` 只代理 Docker Hub，**不会**
+> 加速 `ghcr.io`；GHCR 需要部署机可达、企业镜像代理，或先在联网机器导出并在
+> 部署机 `docker load` 对应后端镜像。
 
-> 当前 Compose 会直接拉取官方 Nginx、Redis、MySQL 镜像，并从本仓库源码构建
-> OrangeServer 后端镜像。测试机首次冷构建约需 3–5 分钟，具体取决于网络和磁盘；
-> 依赖与源码未变化时 Docker 缓存重建通常只需数秒。可用
+> 源码检出的 `make docker-up` 会拉取 Nginx、Redis、MySQL，并从本地源码构建
+> OrangeServer 后端镜像。首次冷构建通常约需 3–5 分钟，具体取决于网络和磁盘；
+> 依赖与源码未变化时 Docker 缓存重建会复用缓存。可用
 > `docker compose ... build --progress=plain backend` 查看详细进度。
-> 使用预构建后端镜像时，可在根 `.env` 设置 `OGS_BACKEND_IMAGE` 与固定的
-> `OGS_BACKEND_TAG`，再执行 `make docker-up-image` 跳过本地构建。目标版本尚未
-> 发布镜像时不要启用该入口。
+> Release 一键安装默认使用已发布的 GHCR 后端镜像。手工部署也可在根 `.env`
+> 设置 `OGS_BACKEND_IMAGE` 与固定的 `OGS_BACKEND_TAG`，再执行
+> `make docker-up-image` 跳过本地构建。
 
 ---
 
@@ -96,6 +108,7 @@ make docker-up
 |------|---------|------|
 | Docker | 24+ | Compose v2 插件 |
 | Docker Compose | v2.20+ | `depends_on` + `required: false` 语法 |
+| 基础命令 | curl、make、openssl、sed、tar、sha256sum、mktemp | 一键安装脚本启动前检查 |
 | 磁盘 | ≥ 20 GB | MySQL 数据卷 |
 
 ---
@@ -149,6 +162,13 @@ OGS_CSRF_ALLOWED_ORIGINS=http://<你的域名或IP>:8080
 > `OGS_CSRF_ALLOWED_ORIGINS=http://<你的域名或IP>:18081`，否则登录或向导提交
 > 可能返回 CSRF 403。
 
+> **避免临时端口冲突**：检查
+> `sysctl net.ipv4.ip_local_port_range net.ipv4.ip_local_reserved_ports`。如果
+> `OGS_HTTP_PORT` 落在临时出站端口范围内，优先换到范围外；无法更换时，把该端口
+> 与已有保留列表合并后持久化到 `/etc/sysctl.d/`，执行 `sysctl --system`，并等待
+> `ss -tan state time-wait` 中该本地端口的旧连接消失。预检会在未保留时拒绝启动，
+> 避免到容器最后一步才因 `address already in use` 失败。
+
 > **密码透明升级**：首次成功登录后，密码自动从 base64 升级为 bcrypt hash。升级后密码不变，但忘记密码需直接操作数据库重置。
 
 ---
@@ -201,11 +221,28 @@ docker compose --env-file .env -f deploy/docker-compose.yml exec backend bash
 ### 开发模式
 
 ```bash
-make docker-dev-up    # 挂载源码，改动即时生效
+make docker-dev-up      # 首次生成 .env.dev，启动全新 MySQL/Redis/backend/Vite
+make docker-dev-ps      # 查看四个开发容器
+make docker-dev-logs    # 跟踪日志
+make docker-dev-down    # 停止但保留开发数据
 ```
 
-> 前置条件：dev 覆盖把 MySQL/Redis 指向 `host.docker.internal` 且不带
-> `--profile bundled`——宿主机需已自行运行 MySQL 与 Redis。
+开发栈使用独立的 Compose project 和命名卷，不复用生产、E2E 或历史开发数据库。
+后端源码映射到容器并由 gunicorn `--reload` 重载，前端源码映射到 Vite 并支持 HMR；
+默认访问 `http://127.0.0.1:8081`，后端调试端口为 `28001`。首次运行生成的
+`.env.dev` 权限受限且已被 Git 忽略。打开入口后先完成 `/setup` 初始化向导；
+向导生成的应用密钥写入开发后端运行时卷。
+
+如需彻底从当前源码重建空数据库，明确执行：
+
+```bash
+make docker-dev-reset   # 仅删除 orangeserver_dev 项目的容器、网络和命名卷
+make docker-dev-up
+```
+
+> `docker-dev-reset` 会永久删除这套开发环境的数据；不会执行全局 `docker system prune`。
+> 如果宿主机的临时端口范围覆盖 8081/28001，请先将这两个监听端口加入
+> `net.ipv4.ip_local_reserved_ports`，或在 `.env.dev` 中改用已保留端口。
 
 ### 升级 & 回滚
 
@@ -223,8 +260,11 @@ make docker-dev-up    # 挂载源码，改动即时生效
 
 ## 物理机部署（高级）
 
-> 适用于不能跑 Docker 的环境。需要 Python 3.11+（推荐 3.12，与容器一致；预检脚本
-> 硬性要求 3.11/3.12）/ MySQL 8.0 / Redis 5+ / Nginx 1.16+。
+> **支持等级：参考。** 本节根据已通过端到端验收的容器拓扑、进程参数和配置边界
+> 整理，尚未在全新物理机上完成同等级实机验收，不属于本次公开发布承诺的一键
+> 路径。适用于愿意自行完成发行版适配和回归验证、且不能运行 Docker 的环境。
+> 需要 Python 3.11+（推荐 3.12，与容器一致；预检脚本硬性要求 3.11/3.12）/
+> MySQL 8.0 / Redis 5+ / Nginx 1.16+。
 
 ### 文件布局
 
@@ -241,7 +281,8 @@ make docker-dev-up    # 挂载源码，改动即时生效
 # 0. 代码与运行时（unit 文件按此布局锚定，路径不可省略）
 useradd --system --home-dir /nonexistent --shell /sbin/nologin orange
 mkdir -p /opt/orangeserver
-git clone <repo-url> /opt/orangeserver/app        # 代码 → /opt/orangeserver/app/backend
+git clone https://github.com/OrangeServers/OrangeServer.git /opt/orangeserver/app
+cd /opt/orangeserver/app
 python3.12 -m venv /opt/orangeserver/venv
 /opt/orangeserver/venv/bin/pip install -r /opt/orangeserver/app/backend/requirements.txt
 
@@ -264,9 +305,13 @@ bash ops/preflight-physical-backend.sh       # 预检（必填项缺失仅 WARN�
 systemctl start orangeserver-backend
 systemctl status orangeserver-backend
 
-# 5. 前端与反向代理（物理机必须由 nginx serve 静态资源，后端不托管 dist）
+# 5. 前端与反向代理（高级；先准备域名和 TLS 证书）
+#    编辑 server_name、证书路径和 resolver，使其与实际环境一致。
+#    当前模板强制 HTTP 跳转 HTTPS；证书不存在时 nginx -t 会失败。
 install -o root -g root -m 0644 deploy/nginx/orange_server.conf /etc/nginx/conf.d/
-#    并把仓库 frontend/dist/ 同步到 conf 中 root 指向的目录后 reload nginx
+#    把仓库 frontend/dist/ 同步到 conf 中 root 指向的目录。
+#    将 /etc/orangeserver/backend.env 中 OGS_HTTPS=true、OGS_PROXY_LAYERS=1，
+#    然后先 nginx -t，验证通过后再 reload nginx。
 
 # 6. 验证
 curl -s http://127.0.0.1:28000/local/health
@@ -274,40 +319,29 @@ curl -s http://127.0.0.1:28000/local/health
 
 > **关键约束**：必须 `--workers 1`（APScheduler 模块导入时启动，多 worker 会重复执行定时任务）；入口必须是 `wsgi:app`（不是 `init:app`）。
 
-### Supervisor 方式（传统）
+### Supervisor 方式（维护者参考）
 
-```bash
-# conf 必须平铺到 conf.d/ 根（supervisord 的 include 不递归子目录）
-sudo cp deploy/supervisor/orange_server.conf /etc/supervisor/conf.d/
-sudo cp deploy/supervisor/orange_server.env.example /etc/supervisor/orange_server.env
-sudo vim /etc/supervisor/orange_server.env
-
-# conf 中的 %(ENV_OGS_*)s 变量必须注入到 supervisord 守护进程本身：
-sudo systemctl edit supervisor      # 加入:
-#   [Service]
-#   EnvironmentFile=/etc/supervisor/orange_server.env
-sudo systemctl restart supervisor
-
-sudo supervisorctl reread && sudo supervisorctl update
-sudo supervisorctl start orange:*
-```
-
-> Supervisor 不读 `env-file`；`source` 到当前 shell 也注入不进已运行的 daemon——
-> 必须用上面的 `systemctl edit` 方式（或在 supervisord.conf 的 `[supervisord]`
-> 段写 `environment=` 指令）。
+仓库保留 Supervisor 配置用于已有环境迁移，但它不是本次公开发布验证的一键路径。
+Supervisor 不原生读取 `EnvironmentFile`，且应用所需的数据库、Redis、密钥和数据
+目录配置必须完整注入守护进程；仅复制
+`deploy/supervisor/orange_server.env.example` 不足以启动生产服务。新部署优先使用
+上面的 Docker Compose 或已文档化的 systemd 路径。维护既有 Supervisor 环境时，
+先把完整配置收敛到 root-only 文件，再通过发行版的 systemd override 注入
+Supervisor 守护进程，并用 `supervisorctl reread` / `update` 验证。
 
 ---
 
 ## Kubernetes 部署（参考）
 
-> 项目未内置 `k8s/` 目录，以下为参考示例。建议使用云厂商托管 MySQL/Redis。
+> 本节从已验证的 Compose 容器拓扑推导，未完成 Kubernetes 集群端到端验收。
+> 项目未内置 `k8s/` 目录，以下仅为参考示例。建议使用云厂商托管 MySQL/Redis。
 
 关键资源：Namespace → ConfigMap（OGS_* 非敏感配置）→ Secret（密钥）→ Backend Deployment（`replicas: 1`，`--workers 1` 限制）→ Service → Ingress。
 
 ```bash
 # 构建 & 推送镜像
-docker build -t registry.example.com/orangeserver-backend:v1.0 backend/
-docker push registry.example.com/orangeserver-backend:v1.0
+docker build -t registry.example.com/orangeserver-backend:v1.0.0 backend/
+docker push registry.example.com/orangeserver-backend:v1.0.0
 ```
 
 自行编写清单（仓库未内置 `k8s/` 目录）后再 `kubectl apply`。

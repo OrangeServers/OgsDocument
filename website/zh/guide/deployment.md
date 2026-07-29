@@ -1,12 +1,12 @@
 # 部署方式
 
-OrangeServer 提供三条经过验证的部署路径，全部经过部署审计并在真实环境
-端到端验证过。
+Docker Compose 是推荐部署路径，已在真实的全新安装环境中完成端到端验证。
+物理机和服务管理器路径面向有相应需求的运维人员，属于高级参考。
 
 ## Docker Compose（推荐）
 
-一条命令启动四个容器（nginx、前端、后端、MySQL/Redis），
-即[快速开始](/zh/guide/getting-started)描述的路径。
+一条命令启动四个容器（前端、后端、MySQL、Redis），即
+[快速开始](/zh/guide/getting-started)描述的路径。
 
 全新安装可直接运行稳定 GitHub Release 中固定版本的薄引导器：
 
@@ -31,8 +31,8 @@ make docker-up-host   # host 模式：复用宿主机已有 MySQL/Redis
 
 ## 物理机
 
-在主机上直接安装 MySQL、Redis、nginx 与 Python 后端。
-首次启动前用预检脚本验证环境：
+在主机上直接安装 MySQL、Redis、nginx 与 Python 后端。这是高级参考路径；
+首次启动前可用预检脚本验证环境：
 
 ```bash
 ops/preflight-physical-backend.sh
@@ -40,7 +40,7 @@ ops/preflight-physical-backend.sh
 
 ## systemd / supervisor
 
-用与容器相同的 gunicorn 命令在 systemd 或 supervisor 下运行后端，
+用与容器相同的 gunicorn 命令在 systemd 或 supervisor 下运行后端。这是高级参考路径；
 unit 文件与配置布局见部署手册。
 
 ## 参考

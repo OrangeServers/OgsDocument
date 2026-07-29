@@ -136,9 +136,10 @@ class TestBackendEnvExample:
         """OGS_DATA_DIR 指向物理机数据目录"""
         assert "OGS_DATA_DIR=/data/orangeserver" in self.env
 
-    def test_05_https_false_default(self):
-        """试运行默认 OGS_HTTPS=false"""
-        assert "OGS_HTTPS=false" in self.env
+    def test_05_https_proxy_defaults_match_nginx_template(self):
+        """systemd 模板默认配合单层 HTTPS nginx 反代"""
+        assert "OGS_HTTPS=true" in self.env
+        assert "OGS_PROXY_LAYERS=1" in self.env
 
 
 # =============================================================================

@@ -2,6 +2,7 @@
 """Cold-start deployment contracts exercised by the real deployment artifacts."""
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -83,6 +84,7 @@ def test_prebuilt_image_path_is_explicit_and_local_build_remains_default():
     assert "OGS_BACKEND_TAG" in image_target
     assert "禁止 latest" in image_target
     assert "--no-build" in image_target
+    assert "env -u OGS_BACKEND_IMAGE -u OGS_BACKEND_TAG" in makefile
     assert "# OGS_BACKEND_IMAGE=ghcr.io/orangeservers/orangeserver-backend" in env_example
 
 
@@ -133,8 +135,23 @@ def test_release_bundle_contains_all_compose_runtime_inputs():
         assert f'"{path}"' in builder
     assert "sha256sum" in builder
     assert "references missing file" in builder
+    assert '"CHANGELOG.md"' in builder
+    assert '"docs/operations/UPGRADE.md"' in builder
+    assert '"${ROOT}/backend/mysqldir/"*.sql' in builder
     assert '"${OUTPUT_DIR}/bootstrap-compose.sh"' in builder
     assert "install -m 0755" in builder
+
+
+def test_docker_daemon_example_contains_only_supported_documented_keys():
+    config = json.loads(
+        (DEPLOY / "daemon.json.example").read_text(encoding="utf-8")
+    )
+    assert set(config) == {
+        "registry-mirrors",
+        "max-concurrent-downloads",
+        "log-driver",
+        "log-opts",
+    }
 
 
 def test_preflight_allows_absent_optional_env_key(tmp_path):
@@ -160,6 +177,9 @@ def test_preflight_does_not_create_a_false_shell_port_override():
     source = (OPS / "preflight-compose.sh").read_text(encoding="utf-8")
     assert "HTTP_PORT_VALUE=$(load_env_val" in source
     assert "\nOGS_HTTP_PORT=$(load_env_val" not in source
+    assert "OGS_BACKEND_IMAGE OGS_BACKEND_TAG" in source
+    assert "ip_local_port_range" in source
+    assert "ip_local_reserved_ports" in source
 
 
 def test_container_nginx_config_is_valid_for_non_default_port():
@@ -278,3 +298,27 @@ def test_dockerfile_builds_from_committed_requirements_without_resolving_lock():
     assert "pip wheel" in dockerfile
     assert "FROM base AS runtime" in dockerfile
     assert "/app/.gunicorn" in dockerfile
+
+
+def test_full_container_dev_is_isolated_and_source_mapped():
+    compose = (DEPLOY / "docker-compose.dev.yml").read_text(encoding="utf-8")
+    assert "host.docker.internal" not in compose
+    assert "dev-mysql-data:/var/lib/mysql" in compose
+    assert "dev-redis-data:/data" in compose
+    assert "../backend:/app" in compose
+    assert "../frontend:/app" in compose
+    assert "--reload" in compose
+    assert "npm run dev" in compose
+    assert "VITE_API_TARGET: http://backend:28000" in compose
+    assert "fetch('http://127.0.0.1:5173/')" in compose
+
+
+def test_dev_env_is_generated_and_not_committed():
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    init_script = (OPS / "init-dev-env.sh").read_text(encoding="utf-8")
+    assert "docker-dev-init:" in makefile
+    assert "docker-dev-reset:" in makefile
+    assert "up -d --wait --wait-timeout 180" in makefile
+    assert ".env.dev" in gitignore
+    assert "umask 077" in init_script
