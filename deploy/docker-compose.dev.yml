@@ -53,7 +53,7 @@ services:
       retries: 20
 
   backend:
-    image: ${OGS_DEV_BACKEND_IMAGE:-ghcr.io/orangeservers/orangeserver-backend}:${OGS_DEV_BACKEND_TAG:-v1.0.3}
+    image: ${OGS_DEV_BACKEND_IMAGE:-ghcr.io/orangeservers/orangeserver-backend}:${OGS_DEV_BACKEND_TAG:-v1.0.4}
     pull_policy: missing
     restart: unless-stopped
     networks:

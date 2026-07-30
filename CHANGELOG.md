@@ -5,6 +5,14 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+## [1.0.4] - 2026-07-30
+
+### Fixed
+
+- Dashboard asset, user, and group totals now exclude soft-deleted records, so
+  the overview cards and resource distribution chart stay consistent with the
+  corresponding management lists after records are deleted.
+
 ## [1.0.3] - 2026-07-30
 
 ### Added

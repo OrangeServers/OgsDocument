@@ -13,13 +13,13 @@ Docker Compose 是推荐部署路径，已在真实的全新安装环境中完�
 ```bash
 set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.3
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.4/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.4
 ```
 
 引导器会下载并校验同版本部署包，生成 MySQL 与 Redis 基础设施密码，
 并启动已发布的
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.3` 镜像。
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.4` 镜像。
 管理员、SMTP、AI 服务商等应用配置仍在浏览器 `/setup` 向导中完成。
 如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
 
@@ -27,8 +27,8 @@ curl -fsSL \
 
 ```bash
 set -o pipefail
-curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/v1.0.3/ops/bootstrap-compose-cn.sh \
-  | sudo bash -s -- --version v1.0.3
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/v1.0.4/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version v1.0.4
 ```
 
 该线路使用腾讯云 TCR 后端镜像，以及固定 digest 的 DaoCloud 匿名公共 Nginx、
