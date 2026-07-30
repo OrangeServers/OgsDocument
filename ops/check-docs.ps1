@@ -110,8 +110,7 @@ $launcherEntrypoints = @(
     'website/guide/getting-started.md',
     'website/zh/guide/deployment.md',
     'website/zh/guide/getting-started.md',
-    'website/.vitepress/theme/components/HomeCta.vue',
-    'website/.vitepress/theme/components/HeroExtras.vue'
+    'website/.vitepress/theme/installCommands.ts'
 )
 foreach ($relativePath in $launcherEntrypoints) {
     $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
@@ -137,6 +136,31 @@ foreach ($relativePath in $launcherEntrypoints) {
         $releaseVersion -ne $argumentVersion
     ) {
         $errors.Add("$relativePath`: launcher URL and --version do not match")
+    }
+    $chinaVersion = [regex]::Match(
+        $content,
+        'gitee\.com/orangeservers/OrangeServer/raw/(?<version>v\d+\.\d+\.\d+)/ops/bootstrap-compose-cn\.sh'
+    ).Groups['version'].Value
+    $chinaArgumentVersion = [regex]::Match(
+        $content,
+        'bootstrap-compose-cn\.sh[\s\S]{0,200}?--version\s+(?<version>v\d+\.\d+\.\d+)'
+    ).Groups['version'].Value
+    if (
+        [string]::IsNullOrWhiteSpace($chinaVersion) -or
+        $chinaVersion -ne $chinaArgumentVersion
+    ) {
+        $errors.Add("$relativePath`: China launcher URL and --version do not match")
+    }
+}
+
+$homepageInstallComponents = @(
+    'website/.vitepress/theme/components/HomeCta.vue',
+    'website/.vitepress/theme/components/HeroExtras.vue'
+)
+foreach ($relativePath in $homepageInstallComponents) {
+    $content = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+    if ($content -notmatch "from '../installCommands'") {
+        $errors.Add("$relativePath`: must use the shared versioned launcher commands")
     }
 }
 
