@@ -111,14 +111,16 @@ run_canonical() {
     local expected_image="$2"
     shift 2
     local record="${TEST_ROOT}/${name}.env"
-    TEST_RECORD="$record" PATH="${FAKE_BIN}:${PATH}" "$CANONICAL_INSTALLER" \
+    if ! TEST_RECORD="$record" PATH="${FAKE_BIN}:${PATH}" "$CANONICAL_INSTALLER" \
         --version "$VERSION" \
         --bundle-file "$BUNDLE_FILE" \
         --checksum-file "$CHECKSUM_FILE" \
         --install-dir "${TEST_ROOT}/${name}" \
         "$@" \
-        >"${TEST_ROOT}/${name}.out" 2>&1 \
-        || fail "canonical installer failed for ${name}"
+        >"${TEST_ROOT}/${name}.out" 2>&1; then
+        cat "${TEST_ROOT}/${name}.out" >&2
+        fail "canonical installer failed for ${name}"
+    fi
     expect_file_contains "$record" "OGS_BACKEND_IMAGE=${expected_image}"
     expect_file_contains "$record" "OGS_NGINX_IMAGE=nginx:1.25-alpine"
     expect_file_contains "$record" "OGS_REDIS_IMAGE=redis:7.4-alpine"
