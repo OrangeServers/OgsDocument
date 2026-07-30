@@ -1,17 +1,30 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useData } from 'vitepress'
+import { installCommands, type InstallRoute } from '../installCommands'
 
 const { lang } = useData()
 const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
-const cmd =
-  'set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh | sudo bash -s -- --version v1.0.3'
+const route = ref<InstallRoute>('global')
+const cmd = computed(() => installCommands[route.value])
+
+watch(
+  isZh,
+  (value) => {
+    route.value = value ? 'china' : 'global'
+    copied.value = false
+  },
+  { immediate: true }
+)
+watch(route, () => {
+  copied.value = false
+})
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(cmd)
+    await navigator.clipboard.writeText(cmd.value)
     copied.value = true
     setTimeout(() => (copied.value = false), 1600)
   } catch {
@@ -46,13 +59,42 @@ async function copy() {
         />
       </a>
     </div>
+    <div
+      class="route-switch"
+      role="group"
+      :aria-label="isZh ? '选择部署线路' : 'Choose a deployment route'"
+    >
+      <button
+        :class="{ active: route === 'global' }"
+        :aria-pressed="route === 'global'"
+        @click="route = 'global'"
+      >
+        {{ isZh ? '全球线路' : 'Global' }}
+      </button>
+      <button
+        :class="{ active: route === 'china' }"
+        :aria-pressed="route === 'china'"
+        @click="route = 'china'"
+      >
+        {{ isZh ? '中国大陆' : 'Mainland China' }}
+      </button>
+    </div>
     <div class="install">
-      <pre><span class="ps">$</span> set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh | sudo bash -s -- --version v1.0.3</pre>
+      <pre><span class="ps">$</span> {{ cmd }}</pre>
       <button
         class="copy"
         :class="{ ok: copied }"
-        :title="isZh ? '复制' : 'Copy'"
-        :aria-label="isZh ? '复制安装命令' : 'Copy install commands'"
+        :title="copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy'"
+        :aria-label="
+          copied
+            ? isZh
+              ? '安装命令已复制'
+              : 'Install command copied'
+            : isZh
+              ? '复制安装命令'
+              : 'Copy install command'
+        "
+        aria-live="polite"
         @click="copy"
       >
         <svg
@@ -104,6 +146,35 @@ async function copy() {
 }
 .badges img {
   border-radius: 4px;
+}
+.route-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
+}
+.route-switch button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 11px;
+  background: transparent;
+  color: var(--vp-c-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.route-switch button:hover {
+  color: var(--vp-c-text-1);
+}
+.route-switch button.active {
+  background: #c2410c;
+  color: #fff;
+}
+.route-switch button:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
 }
 .install {
   display: flex;
@@ -160,6 +231,9 @@ async function copy() {
 @media (max-width: 639px) {
   .hero-extras {
     align-items: center;
+  }
+  .route-switch button {
+    padding-inline: 10px;
   }
   .install pre {
     font-size: 11px;

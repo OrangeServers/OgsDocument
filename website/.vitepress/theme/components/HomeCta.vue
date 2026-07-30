@@ -1,17 +1,40 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useData, withBase } from 'vitepress'
+import { installCommands, type InstallRoute } from '../installCommands'
 
 const { lang } = useData()
 const isZh = computed(() => lang.value === 'zh-CN')
 
 const copied = ref(false)
-const cmd =
-  'set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh | sudo bash -s -- --version v1.0.3'
+const route = ref<InstallRoute>('global')
+const cmd = computed(() => installCommands[route.value])
+const routeSummary = computed(() => {
+  if (route.value === 'china') {
+    return isZh.value
+      ? '从 Gitee 获取固定版本脚本，后端使用腾讯云 TCR，公共依赖镜像走国内线路。'
+      : 'Uses the fixed-tag Gitee launcher, Tencent Cloud TCR, and mainland mirrors for public images.'
+  }
+  return isZh.value
+    ? '从 GitHub Release 获取并校验固定版本部署包，后端使用 GHCR。'
+    : 'Downloads and verifies the fixed-version bundle from GitHub Release and uses GHCR.'
+})
+
+watch(
+  isZh,
+  (value) => {
+    route.value = value ? 'china' : 'global'
+    copied.value = false
+  },
+  { immediate: true }
+)
+watch(route, () => {
+  copied.value = false
+})
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(cmd)
+    await navigator.clipboard.writeText(cmd.value)
     copied.value = true
     setTimeout(() => (copied.value = false), 1600)
   } catch {
@@ -48,13 +71,39 @@ onMounted(() => {
       <p class="cta-sub">
         {{
           isZh
-            ? '固定版本引导器启动 Docker Compose；首次网页向导创建管理员并完成初始化。'
-            : 'The version-pinned launcher starts Docker Compose; the first-run web wizard creates the administrator and completes setup.'
+            ? '选择适合服务器网络的线路；首次网页向导创建管理员并完成初始化。'
+            : 'Choose the route that fits the server network; the first-run wizard creates the administrator and completes setup.'
         }}
       </p>
+      <div
+        class="route-switch"
+        role="group"
+        :aria-label="isZh ? '选择部署线路' : 'Choose a deployment route'"
+      >
+        <button
+          :class="{ active: route === 'global' }"
+          :aria-pressed="route === 'global'"
+          @click="route = 'global'"
+        >
+          {{ isZh ? '全球线路' : 'Global' }}
+        </button>
+        <button
+          :class="{ active: route === 'china' }"
+          :aria-pressed="route === 'china'"
+          @click="route = 'china'"
+        >
+          {{ isZh ? '中国大陆' : 'Mainland China' }}
+        </button>
+      </div>
+      <p class="route-summary">{{ routeSummary }}</p>
       <div class="cta-cmd">
-        <pre><span class="ps">$</span> set -o pipefail; curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh | sudo bash -s -- --version v1.0.3</pre>
-        <button class="copy-btn" :class="{ ok: copied }" @click="copy">
+        <pre><span class="ps">$</span> {{ cmd }}</pre>
+        <button
+          class="copy-btn"
+          :class="{ ok: copied }"
+          aria-live="polite"
+          @click="copy"
+        >
           {{ copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制' : 'Copy' }}
         </button>
       </div>
@@ -128,6 +177,44 @@ onMounted(() => {
   margin: 0 auto 30px;
   max-width: 520px;
   line-height: 1.7;
+}
+.route-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.route-switch button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 15px;
+  background: transparent;
+  color: #9aa0ab;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.route-switch button:hover {
+  color: #f2f3f5;
+}
+.route-switch button.active {
+  background: #c2410c;
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(247, 103, 7, 0.35);
+}
+.route-switch button:focus-visible {
+  outline: 2px solid #ffa94d;
+  outline-offset: 2px;
+}
+.route-summary {
+  min-height: 22px;
+  margin: 12px auto 16px;
+  max-width: 620px;
+  color: #aeb3bd;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 .cta-cmd {
   position: relative;
@@ -223,6 +310,9 @@ onMounted(() => {
   }
   .cta-cmd {
     padding: 14px 16px;
+  }
+  .route-switch button {
+    padding-inline: 11px;
   }
   .cta-cmd pre {
     font-size: 11.5px;
