@@ -50,3 +50,8 @@ Actions Variable `TCR_ENABLED=true`。未设置该变量时，发布工作流只
 工作流会 checkout 输入的稳定标签，而不是用默认分支内容冒充版本。如果失败发生在
 上传资产之前，可以排除故障后重试；一旦 Draft Release 已包含任何同名资产，不要
 覆盖或移动该标签，修复后改用新的补丁版本。已经发布的 Release 会被工作流拒绝。
+
+如果 GHCR 版本标签已经成功发布，但腾讯云 TCR 同步或 Release 附件阶段中断，不要
+删除 GHCR 镜像或移动稳定标签。重新运行 `Publish backend image`，输入原版本并启用
+`tcr_sync_only`；工作流会复用现有 GHCR manifest，通过 registry-to-registry 复制
+恢复 TCR，并继续生成 Release 附件，不重新构建或覆盖 GHCR。
