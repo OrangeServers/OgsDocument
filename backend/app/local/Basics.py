@@ -71,9 +71,9 @@ class CountList:
     @property
     def server_count_all(self):
         try:
-            host_len_msg = t_host.query.count()
-            user_len_msg = t_acc_user.query.count()
-            group_len_msg = t_group.query.count()
+            host_len_msg = t_host.query.filter_by(is_deleted=False).count()
+            user_len_msg = t_acc_user.query.filter_by(is_deleted=False).count()
+            group_len_msg = t_group.query.filter_by(is_deleted=False).count()
             return jsonify({
                 'code': 0,
                 'host_len': host_len_msg,
