@@ -15,24 +15,23 @@ GitHub Release:
 ```bash
 set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.2
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.3
 ```
 
 The launcher downloads and verifies the matching deployment bundle, generates
 the MySQL and Redis infrastructure passwords, and starts the published
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.2` image. Application
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.3` image. Application
 settings—including the administrator, SMTP, and AI providers—remain in the
 browser-based `/setup` wizard. Review the launcher first if your environment
 does not permit piping downloaded scripts to a shell.
 
-For mainland China, use the first published `vX.Y.Z` release that includes the
-fixed-tag Gitee launcher:
+For mainland China, use the fixed-tag Gitee launcher available from v1.0.3:
 
 ```bash
 set -o pipefail
-curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
-  | sudo bash -s -- --version vX.Y.Z
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/v1.0.3/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version v1.0.3
 ```
 
 This route uses the Tencent Cloud TCR backend image and digest-pinned DaoCloud
