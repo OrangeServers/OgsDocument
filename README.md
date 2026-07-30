@@ -106,6 +106,21 @@ published `ghcr.io/orangeservers/orangeserver-backend:v1.0.2` image. Review the
 launcher first if your environment does not permit piping downloaded scripts to
 a shell.
 
+**China mainland route (Gitee fixed tag + Tencent Cloud TCR + public mirrors):**
+
+Replace `vX.Y.Z` with the first published release that includes the mainland
+launcher. This route also requires Git.
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+The mainland route uses digest-pinned DaoCloud public mirrors for the official
+Nginx, Redis, and MySQL images. This community mirror has no availability SLA;
+each image can be overridden with an `OGS_CN_*_IMAGE` environment variable.
+
 Open `http://<server>:8080`. If setup is pending, complete `/setup` and sign in
 with the administrator created by the wizard. `admin` / `admin` exists only
 when the wizard is bypassed and the baseline seed is retained; change it

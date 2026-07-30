@@ -23,6 +23,18 @@ curl -fsSL \
 管理员、SMTP、AI 服务商等应用配置仍在浏览器 `/setup` 向导中完成。
 如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
 
+中国大陆可使用首个已包含该入口的正式 `vX.Y.Z` 版本：
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+该线路使用腾讯云 TCR 后端镜像，以及固定 digest 的 DaoCloud 匿名公共 Nginx、
+Redis、MySQL 镜像。DaoCloud 不承诺可用性 SLA，三个依赖镜像完整引用均可由运维方
+覆盖。
+
 源码检出或已有安装仍可使用仓库目标：
 
 ```bash
@@ -46,7 +58,6 @@ unit 文件与配置布局见部署手册。
 
 ## 参考
 
-完整手册（环境变量、nginx 配置、健康检查、故障排查）见
-[DEPLOY.md](https://github.com/OrangeServers/OrangeServer/blob/main/DEPLOY.md)。
-升级请务必遵循
-[统一升级流程](https://github.com/OrangeServers/OrangeServer/blob/main/docs/operations/UPGRADE.md)。
+完整手册（两条一键线路、环境变量、nginx 配置、健康检查、故障排查）见
+[DEPLOY.md](https://github.com/OrangeServers/OrangeServer/blob/main/DEPLOY.md)。升级请务必
+遵循[统一升级流程](https://github.com/OrangeServers/OrangeServer/blob/main/docs/operations/UPGRADE.md)。

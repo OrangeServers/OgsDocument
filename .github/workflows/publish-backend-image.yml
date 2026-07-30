@@ -126,6 +126,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Tencent Cloud TCR
+        if: ${{ vars.TCR_ENABLED == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ccr.ccs.tencentyun.com
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Resolve publish tags
+        id: publish_tags
+        env:
+          GHCR_IMAGE: ${{ steps.image.outputs.name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          TCR_ENABLED: ${{ vars.TCR_ENABLED }}
+        shell: bash
+        run: |
+          {
+            echo "value<<EOF"
+            echo "${GHCR_IMAGE}:${RELEASE_TAG}"
+            if [ "$TCR_ENABLED" = "true" ]; then
+              echo "ccr.ccs.tencentyun.com/xuwei777/orangeserver-backend:${RELEASE_TAG}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and publish linux/amd64 image
         uses: docker/build-push-action@v6
         with:
@@ -133,11 +158,34 @@ jobs:
           file: backend/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.image.outputs.name }}:${{ steps.version.outputs.tag }}
+          tags: ${{ steps.publish_tags.outputs.value }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.tag }}
+
+      - name: Verify GHCR and TCR digests match
+        if: ${{ vars.TCR_ENABLED == 'true' }}
+        env:
+          GHCR_IMAGE: ${{ steps.image.outputs.name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          ghcr_digest="$(
+            docker buildx imagetools inspect \
+              "${GHCR_IMAGE}:${RELEASE_TAG}" \
+              | awk '$1 == "Digest:" {print $2; exit}'
+          )"
+          tcr_digest="$(
+            docker buildx imagetools inspect \
+              "ccr.ccs.tencentyun.com/xuwei777/orangeserver-backend:${RELEASE_TAG}" \
+              | awk '$1 == "Digest:" {print $2; exit}'
+          )"
+          if [ -z "$ghcr_digest" ] || [ "$ghcr_digest" != "$tcr_digest" ]; then
+            echo "::error::GHCR and TCR digests differ"
+            exit 1
+          fi
+          echo "Both registries published ${ghcr_digest}"
 
       - name: Build checksummed deployment bundle
         env:
@@ -156,6 +204,7 @@ jobs:
         run: |
           gh release upload "$RELEASE_TAG" \
             "release-assets/bootstrap-compose.sh" \
+            "release-assets/bootstrap-compose-cn.sh" \
             "release-assets/orangeserver-deploy-${RELEASE_TAG}.tar.gz" \
             "release-assets/orangeserver-deploy-${RELEASE_TAG}.tar.gz.sha256" \
             --repo "$GITHUB_REPOSITORY"

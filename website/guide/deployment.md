@@ -26,6 +26,19 @@ settings—including the administrator, SMTP, and AI providers—remain in the
 browser-based `/setup` wizard. Review the launcher first if your environment
 does not permit piping downloaded scripts to a shell.
 
+For mainland China, use the first published `vX.Y.Z` release that includes the
+fixed-tag Gitee launcher:
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+This route uses the Tencent Cloud TCR backend image and digest-pinned DaoCloud
+public mirrors for Nginx, Redis, and MySQL. DaoCloud has no availability SLA;
+the three full dependency image references are operator-overridable.
+
 For a source checkout or an existing installation, use the repository targets:
 
 ```bash
@@ -51,8 +64,8 @@ layouts are documented in the deployment manual.
 
 ## Reference
 
-The full manual — environment variables, nginx configuration, health checks,
-and troubleshooting — lives in
+The full manual — both one-line routes, environment variables, nginx
+configuration, health checks, and troubleshooting — lives in
 [DEPLOY.md](https://github.com/OrangeServers/OrangeServer/blob/main/DEPLOY.md).
 For upgrades, always follow the
 [upgrade procedure](https://github.com/OrangeServers/OrangeServer/blob/main/docs/operations/UPGRADE.md).

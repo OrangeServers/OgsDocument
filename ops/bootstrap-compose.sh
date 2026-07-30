@@ -9,16 +9,23 @@ HTTP_PORT="8080"
 PROJECT_NAME="orangeserver"
 BUNDLE_FILE=""
 CHECKSUM_FILE=""
+BACKEND_IMAGE="ghcr.io/orangeservers/orangeserver-backend"
+NGINX_IMAGE="nginx:1.25-alpine"
+REDIS_IMAGE="redis:7.4-alpine"
+MYSQL_IMAGE="mysql:8.0.42"
 
 usage() {
     cat <<'EOF'
 Usage:
-  bootstrap-compose.sh --version vX.Y.Z [--install-dir DIR] [--port PORT] [--project-name NAME]
-  bootstrap-compose.sh --version vX.Y.Z --bundle-file FILE [--checksum-file FILE] [--project-name NAME]
+  bootstrap-compose.sh --version vX.Y.Z [--install-dir DIR] [--port PORT] [--project-name NAME] [--backend-image IMAGE]
+  bootstrap-compose.sh --version vX.Y.Z --bundle-file FILE [--checksum-file FILE] [--project-name NAME] [--backend-image IMAGE]
 
 This is a thin installer for the Docker Compose bundled deployment. It downloads
 and verifies a versioned release bundle, generates infrastructure credentials,
 runs the repository preflight, and calls make docker-up-image.
+
+Advanced registry overrides:
+  --nginx-image REF --redis-image REF --mysql-image REF
 EOF
 }
 
@@ -53,6 +60,22 @@ while [ "$#" -gt 0 ]; do
             CHECKSUM_FILE="${2:-}"
             shift 2
             ;;
+        --backend-image)
+            BACKEND_IMAGE="${2:-}"
+            shift 2
+            ;;
+        --nginx-image)
+            NGINX_IMAGE="${2:-}"
+            shift 2
+            ;;
+        --redis-image)
+            REDIS_IMAGE="${2:-}"
+            shift 2
+            ;;
+        --mysql-image)
+            MYSQL_IMAGE="${2:-}"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -74,9 +97,31 @@ shopt -u nocasematch
     || fail "--project-name must start with a lowercase letter or digit and contain only lowercase letters, digits, hyphens, or underscores"
 [[ "$INSTALL_DIR" = /* ]] && [ "$INSTALL_DIR" != "/" ] \
     || fail "--install-dir must be an absolute path other than /"
+[[ "$BACKEND_IMAGE" =~ ^[a-z0-9][a-z0-9./:_-]*[a-z0-9]$ ]] \
+    && [[ "$BACKEND_IMAGE" == */* ]] \
+    && [[ "${BACKEND_IMAGE#*/}" != *":"* ]] \
+    && [[ "$BACKEND_IMAGE" != *"//"* ]] \
+    && [[ "$BACKEND_IMAGE" != *".."* ]] \
+    || fail "--backend-image must be an untagged lowercase container image path"
+validate_image_ref() {
+    local option="$1"
+    local image_ref="$2"
+    local image_tail="${image_ref##*/}"
+    [[ "$image_ref" =~ ^[a-z0-9][a-z0-9./:_@-]*[a-z0-9]$ ]] \
+        && [[ "$image_ref" != *"//"* ]] \
+        && [[ "$image_ref" != *".."* ]] \
+        && {
+            [[ "$image_ref" =~ @sha256:[0-9a-f]{64}$ ]] \
+                || { [[ "$image_ref" != *"@"* ]] && [[ "$image_tail" =~ ^[^:]+:[^:]+$ ]]; }
+        } \
+        || fail "${option} must be a lowercase tagged or digest-pinned container image reference"
+}
+validate_image_ref --nginx-image "$NGINX_IMAGE"
+validate_image_ref --redis-image "$REDIS_IMAGE"
+validate_image_ref --mysql-image "$MYSQL_IMAGE"
 [ "$(id -u)" -eq 0 ] || fail "run this installer as root (for example through sudo)"
 
-for command in docker make openssl sed tar sha256sum mktemp; do
+for command in docker find make openssl sed tar sha256sum mktemp; do
     command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
 docker info >/dev/null 2>&1 || fail "Docker daemon is unavailable"
@@ -129,6 +174,12 @@ tar -C "$WORK_DIR" -xzf "${WORK_DIR}/${archive_name}"
 bundle_root="${WORK_DIR}/orangeserver"
 cd "$bundle_root"
 
+# The China entry point clones under umask 077. Static files are public assets,
+# so normalize only frontend/dist for the unprivileged Nginx worker. Secrets and
+# runtime data keep their restrictive permissions.
+find frontend/dist -type d -exec chmod 755 {} +
+find frontend/dist -type f -exec chmod 644 {} +
+
 cp .env.example .env
 cp backend/.env.example backend/.env
 chmod 600 .env backend/.env
@@ -149,8 +200,11 @@ mysql_app_password="$(openssl rand -hex 24)"
 redis_password="$(openssl rand -hex 24)"
 
 set_key .env COMPOSE_PROJECT_NAME "$PROJECT_NAME"
-set_key .env OGS_BACKEND_IMAGE ghcr.io/orangeservers/orangeserver-backend
+set_key .env OGS_BACKEND_IMAGE "$BACKEND_IMAGE"
 set_key .env OGS_BACKEND_TAG "$VERSION"
+set_key .env OGS_NGINX_IMAGE "$NGINX_IMAGE"
+set_key .env OGS_REDIS_IMAGE "$REDIS_IMAGE"
+set_key .env OGS_MYSQL_IMAGE "$MYSQL_IMAGE"
 set_key .env OGS_HTTP_PORT "$HTTP_PORT"
 set_key .env MYSQL_ROOT_PASSWORD "$mysql_root_password"
 set_key .env OGS_MYSQL_HOST mysql
