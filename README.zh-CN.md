@@ -103,6 +103,20 @@ curl -fsSL \
 `ghcr.io/orangeservers/orangeserver-backend:v1.0.2` 镜像。
 如果环境不允许把下载内容直接交给 shell，请先下载并审阅引导器再执行。
 
+**中国大陆线路（Gitee 固定 tag + 腾讯云 TCR + 公共镜像）：**
+
+将 `vX.Y.Z` 替换为首个已包含大陆引导器的正式版本；该线路还要求 Git。
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+大陆线路会从 DaoCloud 匿名公共镜像拉取固定 digest 的 Nginx、Redis、MySQL 官方
+镜像。该社区公共服务不承诺可用性 SLA；可用 `OGS_CN_NGINX_IMAGE`、
+`OGS_CN_REDIS_IMAGE`、`OGS_CN_MYSQL_IMAGE` 分别覆盖完整镜像引用。
+
 浏览器打开 `http://<服务器地址>:8080`。应用未配置时会进入 `/setup`，请使用
 向导创建的管理员登录；仅跳过向导并保留基线种子时才存在 `admin/admin`，必须
 立即修改。源码检出、复用宿主机数据库和物理机部署仍见

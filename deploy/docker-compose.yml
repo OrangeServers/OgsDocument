@@ -16,8 +16,8 @@
 #   docker compose --env-file .env -f deploy/docker-compose.yml up -d --build backend frontend
 #   需先在顶层 .env 中设 OGS_MYSQL_HOST / OGS_REDIS_HOST 为外部地址
 #
-# 镜像加速: 国内用户配 daemon.json mirror (deploy/daemon.json.example)
-# Dockerfile 已内置阿里云 apt 源 + 清华 pip 源
+# 镜像来源可通过根 .env 的 OGS_NGINX_IMAGE / OGS_REDIS_IMAGE /
+# OGS_MYSQL_IMAGE 覆盖；国内一键入口会传入已验证的匿名公共镜像地址。
 # =============================================================================
 
 services:
@@ -75,9 +75,9 @@ services:
 
   # ---------- 前端 nginx ----------
   frontend:
-    # ⓘ 锁镜像版本 + SHA digest 防止上游更新引入不兼容变更
+    # ⓘ 全球默认锁版本；中国大陆入口使用固定 SHA digest
     # REV49: 去掉 -alpine3.20 具体版本后缀, 用 -alpine 自动匹配官方 Alpine 版本
-    image: nginx:1.25-alpine
+    image: ${OGS_NGINX_IMAGE:-nginx:1.25-alpine}
     # ⓘ 前端是 pre-build 产物: 部署前需在开发者机器 / CI 跑 `make build-frontend`
     #   输出 frontend/dist/ (2-3 MB 静态文件), 这里用 nginx:alpine 直接 serve
     #   部署机不需要装 node/npm
@@ -103,9 +103,9 @@ services:
   #   本机有 redis 时, 用 `docker compose up -d backend frontend` (不起 redis/mysql) +
   #   backend OGS_REDIS_HOST=host.docker.internal 连本机
   redis:
-    # ⓘ 锁镜像版本 + SHA digest
+    # ⓘ 全球默认锁版本；中国大陆入口使用固定 SHA digest
     # REV49: 去掉 -alpine3.21 具体版本后缀
-    image: redis:7.4-alpine
+    image: ${OGS_REDIS_IMAGE:-redis:7.4-alpine}
     profiles: ["bundled"]
     # REV48 (P0-10): 注入 OGS_REDIS_PASSWORD 到容器, 让 backend 配的密码真生效
     environment:
@@ -135,7 +135,7 @@ services:
   #   backend OGS_MYSQL_HOST=host.docker.internal 连本机
   mysql:
     # ⓘ 锁镜像版本
-    image: mysql:8.0.42
+    image: ${OGS_MYSQL_IMAGE:-mysql:8.0.42}
     profiles: ["bundled"]
     restart: unless-stopped
     networks:

@@ -57,6 +57,7 @@ required=(
     "deploy/nginx/ogs_proxy_common.conf"
     "frontend/dist/index.html"
     "ops/bootstrap-compose.sh"
+    "ops/bootstrap-compose-cn.sh"
     "ops/preflight-compose.sh"
 )
 for path in "${required[@]}"; do
@@ -99,6 +100,7 @@ cp "${ROOT}/deploy/nginx/ogs_proxy_common.conf" "${bundle_root}/deploy/nginx/"
 cp -a "${ROOT}/frontend/dist" "${bundle_root}/frontend/"
 cp "${ROOT}/ops/preflight-compose.sh" "${bundle_root}/ops/"
 cp "${ROOT}/ops/bootstrap-compose.sh" "${bundle_root}/ops/"
+cp "${ROOT}/ops/bootstrap-compose-cn.sh" "${bundle_root}/ops/"
 
 mkdir -p "$OUTPUT_DIR"
 tar -C "$STAGE" -czf "${OUTPUT_DIR}/${ARCHIVE}" orangeserver
@@ -109,7 +111,11 @@ tar -C "$STAGE" -czf "${OUTPUT_DIR}/${ARCHIVE}" orangeserver
 install -m 0755 \
     "${ROOT}/ops/bootstrap-compose.sh" \
     "${OUTPUT_DIR}/bootstrap-compose.sh"
+install -m 0755 \
+    "${ROOT}/ops/bootstrap-compose-cn.sh" \
+    "${OUTPUT_DIR}/bootstrap-compose-cn.sh"
 
 echo "[OK] ${OUTPUT_DIR}/${ARCHIVE}"
 echo "[OK] ${OUTPUT_DIR}/${ARCHIVE}.sha256"
 echo "[OK] ${OUTPUT_DIR}/bootstrap-compose.sh"
+echo "[OK] ${OUTPUT_DIR}/bootstrap-compose-cn.sh"

@@ -17,6 +17,22 @@ does not permit piping a downloaded script to a shell, download and review the
 launcher first. For source-based and host deployments, see
 [Deployment options](/guide/deployment).
 
+## China mainland route
+
+Use the first published `vX.Y.Z` release that includes this route. Its fixed-tag
+Gitee launcher uses the Tencent Cloud TCR backend image and digest-pinned
+DaoCloud public mirrors for the official Nginx, Redis, and MySQL images:
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+DaoCloud is a community public mirror without an availability SLA. Override
+its full image references with `OGS_CN_NGINX_IMAGE`, `OGS_CN_REDIS_IMAGE`, and
+`OGS_CN_MYSQL_IMAGE` when needed.
+
 Open `http://<server>:8080`. There is no default administrator account or
 password.
 

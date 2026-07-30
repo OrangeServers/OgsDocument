@@ -7,6 +7,11 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- China mainland one-line Compose deployment through a fixed Gitee release tag,
+  the project backend on Tencent Cloud TCR, and digest-pinned DaoCloud public
+  mirrors for the official Nginx, Redis, and MySQL images. All public dependency
+  image references remain operator-overridable.
+
 - Full bilingual UI (Simplified Chinese / English): every page, menu,
   dialog, and Element Plus built-in string follows the interface language.
   Switch instantly under Settings → Appearance & Language; the choice is
@@ -43,6 +48,10 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   upgrade procedure, trust-boundary documentation, and community health files.
 
 ### Fixed
+
+- The versioned installer now normalizes only the packaged frontend static
+  assets to Nginx-readable permissions, preventing `/setup` from returning 500
+  after a restrictive fixed-tag checkout while keeping generated secrets 0600.
 
 - Every documented deployment path now actually works, verified end-to-end
   (deployment audit): `orange.sql` is loadable for the first time — seed

@@ -9,18 +9,36 @@
 
 > 将下列 `vX.Y.Z` 替换为同一个已发布的稳定版本号。
 
+### 全球线路（GitHub Release + GHCR）
+
 ```bash
-curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/vX.Y.Z/bootstrap-compose.sh \
+set -o pipefail
+curl -fsSL https://github.com/OrangeServers/OrangeServer/releases/download/vX.Y.Z/bootstrap-compose.sh \
   | sudo bash -s -- --version vX.Y.Z
 ```
 
-该命令中的脚本只是薄引导器：下载并校验对应 Release 的部署包、自动生成 MySQL /
-Redis 基础设施密码，然后调用仓库内的预检与 `make docker-up-image`。应用管理员、
-系统名称、SMTP、AI 等仍在浏览器 `/setup` 向导配置。
+### 中国大陆线路（Gitee 固定 tag + 腾讯云 TCR + 公共镜像）
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+两条命令都是薄引导器，都会自动生成 MySQL / Redis 基础设施密码、运行仓库预检，
+并以已发布的后端镜像启动 Compose。全球线路从 GitHub Release 获取部署包并从
+GHCR 拉后端镜像；中国大陆线路从 Gitee 镜像克隆同一固定 tag、本机构建部署包，
+从腾讯云 TCR 拉后端镜像，并从 DaoCloud 匿名公共镜像拉取固定 digest 的 Nginx、
+Redis、MySQL 官方镜像。应用管理员、系统名称、SMTP、AI 等仍在浏览器
+`/setup` 向导配置。
+
+一键安装的前置条件：Docker Engine 24+、Docker Compose v2.20+、Make、`sudo`/
+root 权限和 `curl`。中国大陆线路另需 Git。请在 shell 中保留 `set -o pipefail`，
+以免下载失败被管道末端掩盖。
 
 更保守的做法是先从同一 Release 下载 `bootstrap-compose.sh`，人工审阅后再执行；
-引导器、部署包和校验文件都属于同一个固定版本，不会下载默认分支 HEAD。
+全球线路的引导器、部署包和校验文件都属于同一个固定版本，不会下载默认分支
+HEAD。中国大陆线路的引导器 raw 地址与 Git clone 都固定到同一 tag。
 同一主机并行验收多个实例时，可追加唯一的
 `--project-name orangeserver_test --install-dir /opt/orangeserver-test --port 18082`；
 项目名决定 Compose 容器、网络和数据卷前缀。
@@ -31,6 +49,7 @@ Redis 基础设施密码，然后调用仓库内的预检与 `make docker-up-ima
 # 1. 获取源码 & 配置
 git clone https://github.com/OrangeServers/OrangeServer.git orangeserver
 cd orangeserver
+# 中国大陆可改用：https://gitee.com/orangeservers/OrangeServer.git
 # 无法访问 GitHub 时，也可以在联网机器下载正式 Release/source tarball，
 # 上传到部署机并解压为 orangeserver/ 后进入该目录。
 cp .env.example .env && cp backend/.env.example backend/.env
@@ -99,6 +118,19 @@ make docker-up
 > Release 一键安装默认使用已发布的 GHCR 后端镜像。手工部署也可在根 `.env`
 > 设置 `OGS_BACKEND_IMAGE` 与固定的 `OGS_BACKEND_TAG`，再执行
 > `make docker-up-image` 跳过本地构建。
+
+> 中国大陆一键线路会从腾讯云 TCR 拉 OrangeServer 后端镜像，并使用 DaoCloud
+> 匿名公共镜像拉取固定 digest 的 Nginx、Redis、MySQL 官方镜像。DaoCloud 是
+> 社区公共服务，不承诺可用性 SLA；如需使用组织自己的镜像源，可分别设置
+> `OGS_CN_NGINX_IMAGE`、`OGS_CN_REDIS_IMAGE`、`OGS_CN_MYSQL_IMAGE`。使用一行
+> 管道时应把变量传给 `sudo env`，例如：
+>
+> ```bash
+> set -o pipefail
+> curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+>   | sudo env OGS_CN_NGINX_IMAGE=registry.example.com/nginx:1.25 \
+>       bash -s -- --version vX.Y.Z
+> ```
 
 ---
 

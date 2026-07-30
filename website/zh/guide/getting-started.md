@@ -15,6 +15,21 @@ curl -fsSL \
 直接交给 shell，请先下载并审阅引导器。源码部署和复用宿主机服务的部署方式见
 [部署方式](/zh/guide/deployment)。
 
+## 中国大陆线路
+
+请使用首个已包含该入口的正式 `vX.Y.Z` 版本。固定 tag 的 Gitee 引导器会使用腾讯云
+TCR 后端镜像，以及固定 digest 的 DaoCloud 匿名公共 Nginx、Redis、MySQL 镜像：
+
+```bash
+set -o pipefail
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version vX.Y.Z
+```
+
+DaoCloud 是不承诺可用性 SLA 的社区公共服务；需要时可通过
+`OGS_CN_NGINX_IMAGE`、`OGS_CN_REDIS_IMAGE`、`OGS_CN_MYSQL_IMAGE` 覆盖完整镜像
+引用。覆盖示例见[部署方式](/zh/guide/deployment)。
+
 浏览器打开 `http://<服务器地址>:8080`。系统没有默认管理员账号或密码。
 
 ::: tip 首次部署向导
