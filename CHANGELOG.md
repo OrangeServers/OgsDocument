@@ -5,6 +5,8 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+## [1.0.3] - 2026-07-30
+
 ### Added
 
 - China mainland one-line Compose deployment through a fixed Gitee release tag,
@@ -114,8 +116,3 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `rev49_ai_context_window.sql`, and `rev50_ai_diagnostics.sql` in order.
 - Follow [the unified upgrade procedure](docs/operations/UPGRADE.md); do not
   execute isolated migration snippets from older documentation.
-
-## Release history
-
-The repository does not yet have a maintained tagged-release history. Future
-releases should add dated sections here and link their migration requirements.
