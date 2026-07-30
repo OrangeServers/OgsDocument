@@ -6,27 +6,27 @@ Docker Engine with Docker Compose v2, `curl`, and `sudo` access.
 ```bash
 set -o pipefail
 curl -fsSL \
-  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.2/bootstrap-compose.sh \
-  | sudo bash -s -- --version v1.0.2
+  https://github.com/OrangeServers/OrangeServer/releases/download/v1.0.3/bootstrap-compose.sh \
+  | sudo bash -s -- --version v1.0.3
 ```
 
 The launcher downloads and verifies the matching deployment bundle, generates
 the MySQL and Redis infrastructure passwords, and starts the published
-`ghcr.io/orangeservers/orangeserver-backend:v1.0.2` image. If your environment
+`ghcr.io/orangeservers/orangeserver-backend:v1.0.3` image. If your environment
 does not permit piping a downloaded script to a shell, download and review the
 launcher first. For source-based and host deployments, see
 [Deployment options](/guide/deployment).
 
 ## China mainland route
 
-Use the first published `vX.Y.Z` release that includes this route. Its fixed-tag
-Gitee launcher uses the Tencent Cloud TCR backend image and digest-pinned
+This route is available from v1.0.3. Its fixed-tag Gitee launcher uses the
+Tencent Cloud TCR backend image and digest-pinned
 DaoCloud public mirrors for the official Nginx, Redis, and MySQL images:
 
 ```bash
 set -o pipefail
-curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/vX.Y.Z/ops/bootstrap-compose-cn.sh \
-  | sudo bash -s -- --version vX.Y.Z
+curl -fsSL https://gitee.com/orangeservers/OrangeServer/raw/v1.0.3/ops/bootstrap-compose-cn.sh \
+  | sudo bash -s -- --version v1.0.3
 ```
 
 DaoCloud is a community public mirror without an availability SLA. Override
