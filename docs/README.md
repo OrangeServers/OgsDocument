@@ -31,6 +31,7 @@
 - [后端开发说明](../backend/README.md)
 - [前端开发说明](../frontend/README.md)
 - [AI REST/SSE 契约](ai/API.md)
+- [AI 运维路线图](ai/ROADMAP.md)：当前边界、Linux 受控自治工作包和长期里程碑。
 - [贡献指南](../CONTRIBUTING.md)
 - [变更记录](../CHANGELOG.md)
 

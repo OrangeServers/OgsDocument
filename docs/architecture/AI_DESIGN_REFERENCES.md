@@ -3,6 +3,10 @@
 OrangeServer 的 AI 运维能力优先复用现有资产、凭据、SSH、审批和审计体系。
 下列成熟项目用于校验设计方向，不是运行时依赖，也不会被直接嵌入服务。
 
+> 本文同时讨论当前实现和未来方向。当前发布能力仍以固定只读诊断和人工审批动作为
+> 边界；受控自治、监控、Docker 和 Kubernetes Adapter 均属于
+> [AI 运维路线图](../ai/ROADMAP.md)中的规划能力。
+
 ## 参考项目
 
 ### HolmesGPT
@@ -25,12 +29,41 @@ toolset，并支持 Runbook 驱动的调查流程。OrangeServer 借鉴其“工
 稳定契约；未来接入 Prometheus、Loki 或其他 Adapter 时，优先映射到兼容的资源与事件
 字段，而不是为每个数据源发明新的语义。
 
+### LangGraph 与 Celery
+
+[LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
+和 [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts) 提供 checkpoint、
+暂停和恢复语义，适合规划中的长任务自治工作流。OrangeServer 不迁移现有聊天 Runner；
+LangGraph 只负责流程游标，MySQL 继续保存权威业务状态。
+
+[Celery](https://docs.celeryq.dev/en/stable/getting-started/introduction.html) 只负责把有界工作
+交给独立 Worker。任务按至少一次投递设计，幂等和最终结果仍由 MySQL 领域状态保证，
+不把 Celery result backend 当作事实源。
+
+### OpenHands
+
+[OpenHands Runtime](https://docs.openhands.dev/openhands/usage/architecture/runtime) 将 Action、
+Observation 与隔离执行环境分开。OrangeServer 只借鉴动作提案、风险确认、执行预算和
+可恢复验证，不引入其完整 Runtime，也不把通用 Shell 直接交给模型。
+
+## 当前边界与未来自治
+
+当前只读诊断仍不接受 Shell；当前修复动作仍需人工确认。规划中的“实验室自治”也不是
+绕过这条边界，而是新增服务端固定的模式、资产环境、结构化动作、策略判断、预算、
+checkpoint 和独立验证。
+
+未来可以支持任意 Shell 提案，但它始终需要绑定目标、凭据、参数和步骤的精确审批。
+结构化普通变更只能在管理员标记的 `lab` 资产上自动执行；生产环境和高影响动作不会
+因为模型声称“安全”而跳过审批。
+
 ## 明确不照搬的部分
 
-- 不把模型直接暴露给任意 Shell、Docker exec 或集群管理凭据。
+- 不提供绕过服务端策略和审批的任意 Shell、Docker exec 或集群管理入口。
 - 不用危险命令黑名单替代参数白名单和服务端固定探针。
 - 不因引入 AI 绕过 OrangeServer 现有的资产权限、凭据授权、审批和审计。
 - 不把 1M 上下文当作日志仓库；长证据仍使用持久化、检索和分层摘要。
+- 不因规划 LangGraph 就迁移当前聊天循环，也不整包引入 LangChain。
+- 不在只有一个实现时预先建设公开 Adapter、MCP 或插件系统。
 
 具体安全边界见[架构与信任边界](TRUST_BOUNDARIES.md)，诊断状态和证据契约见
 [AI REST 与 SSE API](../ai/API.md)。

@@ -1,0 +1,282 @@
+# AI 运维路线图
+
+> 本文描述 OrangeServer AI 运维的规划方向和后续工作包，不代表这些能力已经发布。
+> 当前可用行为以 [AI 运维使用指南](USER_GUIDE.md)、
+> [受控只读诊断](DIAGNOSTICS.md) 和 [AI REST/SSE 契约](API.md) 为准。
+
+## 目标与边界
+
+OrangeServer 的目标不是用 AI 包装少量 Linux 基础命令，而是复用现有资产、凭据、
+权限、SSH、审批和审计能力，把调查、证据、修复和验证组织成可恢复的运维工作流。
+
+路线图遵守以下原则：
+
+- 当前聊天 `AgentRunner`、固定只读诊断和短时审批动作继续独立维护。
+- LangGraph 仅用于新的长任务自治工作流，不迁移现有聊天循环。
+- 不整包引入 LangChain；继续使用现有 Provider 和 Tool Calling 实现。
+- MySQL 始终是业务事实源，模型输出、SSE 和 checkpoint 都不能覆盖权威状态。
+- 模型提出动作，服务端决定自动执行、等待审批或拒绝；模型不能自行提高权限。
+- 先做深一个 Linux 单机闭环，再扩展监控、Docker 和 Kubernetes。
+- 不提前建设公开插件系统、通用 Runbook DSL、多 Agent 或万能回滚引擎。
+
+## 当前基线
+
+M0 是已经发布的能力：
+
+- AI 对话、资产和账号查询、权限过滤的结果集；
+- 服务端固定档案的 Linux/Docker 只读诊断；
+- 确定性 Analyzer、Evidence 引用、诊断报告和 Runbook 建议；
+- 批量命令预览、人工审批、执行结果和审计；
+- 256K 标准上下文与 Provider 声明支持时可选的 1M 深度诊断档。
+
+当前诊断不能提交自由 Shell，修复也不会由诊断流程自动执行。后文中的自治接口、
+页面、状态和数据表均处于规划状态。
+
+## 长期里程碑
+
+| 阶段 | 核心交付 | 进入下一阶段的门槛 |
+|---|---|---|
+| M0 当前基线 | AI 对话、固定只读诊断、批量命令审批、审计和上下文档位 | 已发布；后续不得破坏兼容性 |
+| M1 Linux 自治 | 单机调查、安装、配置修改、服务操作、验证、审批暂停和重启恢复 | 强杀恢复、安全测试和完整纵向闭环通过 |
+| M2 监控与事故工作台 | Prometheus、Loki、Alertmanager 受控查询；异常时间线、最近变更关联和告警触发调查 | 查询范围、租户、超时、脱敏和 Evidence 契约稳定 |
+| M3 Docker | 容器、Compose、事件和日志诊断；受控重启、重建、旧 digest 回退及验证 | 不暴露宿主 Docker socket；结构化执行和回退证据稳定 |
+| M4 Kubernetes | 先做只读 Analyzer，再做 restart、scale、rollback 等修复 | 最小 RBAC、Secret 排除、dry-run、diff、审批和复核通过 |
+| M5 运维知识闭环 | 已验证处置转 Runbook、相似事故、健康节点对比、服务拓扑、影响范围和复盘草稿 | 积累足够经人工审核的真实成功案例 |
+| M6 持续运维与评测 | 定时巡检、容量趋势、证书/EOL、场景回放、模型评测和 Agent 可观测性 | 用真实数据证明收益后再评估 MCP、插件或更重调度平台 |
+
+长期里程碑只在本文维护。前一阶段通过完成门后，才为下一阶段创建一至两个近期
+工作包，不提前创建 M2～M6 的占位 Issue。
+
+### M2：监控与事故工作台
+
+- Prometheus 和 Loki 请求必须经过服务端查询代理；模型不能提供任意 URL、Header、
+  tenant 或无限制 PromQL/LogQL。
+- 服务端限制时间范围、步长、返回量、并发、超时和可用标签，并在进入模型前聚合、
+  脱敏和外置大结果。
+- Alertmanager 首版只触发只读调查；创建 silence 或修改告警配置属于独立写动作。
+- 事故工作台以症状、假设、Evidence、动作、验证和结论时间线为权威事实，聊天只是入口。
+- 关联 OrangeServer 审计、定时任务、监控拐点以及后续接入的发布和容器事件。
+
+### M3：Docker
+
+- Docker 是自治执行器之后的独立 Adapter，不恢复通用容器 CRUD 页面。
+- 不把宿主 `/var/run/docker.sock` 挂给 Web 或 Agent；优先使用 rootless Docker，
+  否则通过 SSH 后的最小权限结构化 gateway。
+- 先提供状态、health、OOM、重启次数、事件、Compose 拓扑和限长日志，再提供 restart、
+  pull/recreate 及旧 digest 回退。
+- 任意 `docker exec`、privileged、host mount、设备映射和 volume 删除保持强审批或拒绝。
+
+### M4：Kubernetes
+
+- 使用独立凭据 Adapter，不经通用 SSH Shell 复用 kubeconfig 或 ServiceAccount token。
+- 先实现 namespace 范围的只读资源、Event、日志和指标 Analyzer，默认完全排除 Secret 内容。
+- 写操作使用独立最小 RBAC；先 server-side dry-run 和 diff，再审批、执行和自动复核。
+- 首批修复只包括 rollout restart、scale、rollback 和删除单个可重建 Pod；不开放通用
+  `kubectl`、`exec` 或 `cluster-admin`。
+
+### M5～M6：知识闭环和持续运维
+
+- 只有经过人工审核且验证成功的 Run 才能转成版本化 Runbook。
+- 历史相似事故只提供候选方案，不能自动继承旧事故的权限或安全结论。
+- 健康实例对比、服务拓扑和影响分析必须基于可追溯数据，不由模型凭空补全。
+- 复盘草稿区分事实、证据和模型推断，用户确认后才能归档。
+- 持续巡检先由确定性规则发现证书到期、容量趋势、反复重启、备份失败和软件 EOL，
+  再按需触发模型，避免周期性发送全部原始数据。
+- 至少存在两个稳定外部 Adapter 后，才评估公开 MCP 或插件接口。
+
+## M1：Linux 受控自治
+
+### 产品形态
+
+M1 增加独立的自治任务工作台，前端规划路由为 `/ai-runs` 和
+`/ai-runs/:runId`。现有 AI 对话最终只增加“创建自治任务草稿”和“打开任务”的引用卡；
+模型不能从聊天直接启动任务。
+
+v1 仅管理员可用，一次 Run 固定一个目标资产、一个系统用户和一个 Agent。Run 启动后，
+模型不能改变目标、凭据、模式或服务端预算。同一资产最多存在一个活动自治 Run。
+
+### 模块职责
+
+| 模块 | 唯一职责 |
+|---|---|
+| MySQL | Run、Step、审批、Event、Artifact 引用和最终结果的业务事实 |
+| LangGraph | `计划 → 策略 → 审批暂停 → 执行 → 观察 → 验证 → 决策` 的流程游标 |
+| 专用 Redis 8 | LangGraph checkpoint 和 Celery broker，不保存业务最终结果 |
+| Celery Worker | 按 `run_id` 推进有界步骤，不承担流程状态或结果存储 |
+| 自治执行器 | 复用现有权限、凭据、SSH host-key 校验和审计，作为唯一远程副作用入口 |
+| 独立工作台 | 展示权威快照、进度、审批、证据、恢复状态和验证结果 |
+
+现有 Redis 7 保持不变。专用 Redis 8 使用 AOF、持久卷和 `noeviction`：DB 0 保存
+checkpoint，DB 1 作为 Celery broker。不启用 Celery result backend，不引入 Flower，
+不自研 MySQL Checkpointer。
+
+WP0 优先验证官方 shallow Redis saver 是否满足 interrupt、resume 和重启恢复；若不满足，
+使用官方完整 Redis saver。两种方案都只保存紧凑 Graph State。
+
+### 最小领域模型
+
+新增四张表：
+
+- `t_ai_autonomous_run`
+- `t_ai_autonomous_step`
+- `t_ai_autonomous_event`
+- `t_ai_autonomous_artifact`
+
+资产增加服务端管理的 `ai_environment=production|staging|lab`，默认 `production`，
+只有管理员可以修改。审批字段保存在对应 Step 中，不再拆分 Action、Approval 或
+Verification 表。
+
+状态契约：
+
+- Run：`draft | queued | running | waiting_approval | recovering | needs_attention | completed | failed | cancelled | expired`
+- Outcome：`resolved | not_resolved | inconclusive`
+- Step：`proposed | waiting_approval | approved | running | succeeded | failed | skipped | outcome_unknown | cancelled`
+- Step kind：`plan | action | verification`
+
+实现必须满足：
+
+- 活动 Run 使用数据库租约和唯一约束防止并行执行；
+- Run 持久化 `revision`、`graph_version`、预算、心跳、取消请求和最新 Event 序号；
+- Event 在 Run 内单调递增，GET 快照始终比 SSE 增量权威；
+- Artifact 清控制字符、脱敏、限长后使用现有 Fernet 体系加密；
+- Artifact 默认保留 7 天，Run、Step 和 Event 默认保留 90 天；
+- Graph State 只保存 ID、阶段、计数和短摘要，不放凭据、完整命令、原始日志或完整 Prompt。
+
+### 模式和动作
+
+| 模式 | 自动执行范围 |
+|---|---|
+| `read_only` | 只读调查和验证 |
+| `assisted` | 只读自动；所有变更等待精确审批 |
+| `lab_autonomous` | 仅 `lab` 资产可选；结构化普通变更自动，高影响动作仍审批 |
+
+v1 动作保持克制：
+
+- 观察、限长文件和日志读取；
+- 已配置软件源中的包查询和安装；
+- 带备份与 diff 的结构化文件补丁和恢复；
+- systemd 状态、启动、停止和重启；
+- 端口、HTTP、进程、日志和服务状态验证；
+- 任意 Shell 可以提交，但始终等待绑定完整动作摘要的人工审批。
+
+以下动作即使在 `lab_autonomous` 中也必须审批：新增软件源、下载并执行、账号或 SSH
+配置、网络或防火墙、内核、Docker daemon、重启关机以及范围无法确定的修改。
+
+以下动作在 v1 永久拒绝：磁盘分区或格式化、根目录或宽范围删除、主动读取密钥、
+横向 SSH、绕过审计或绕过权限。危险命令黑名单只提供风险信号，不能证明安全。
+
+审批 digest 必须绑定目标、凭据、工具、规范化参数、工作目录、超时、Step ID 和动作
+版本；任一字段变化都会使审批失效。每个动作执行前重新检查当前用户、资产权限、
+凭据授权、资产环境和 digest。
+
+### 恢复、取消和回退
+
+Celery 任务只携带 `run_id`，按至少一次投递设计。Worker 通过数据库 revision 和租约
+幂等认领 Run，并在启动时扫描 queued、请求恢复和租约过期的 Run：
+
+- 只读动作可以自动重试；
+- 已确认尚未执行的结构化动作可以继续；
+- 写动作可能已经生效但结果未落库时，Step 进入 `outcome_unknown`，Run 进入
+  `needs_attention`，绝不自动重放；
+- Redis checkpoint 丢失时，只能从 MySQL 已确认的安全边界重建；
+- 取消是请求，执行器确认停止前不能把 Run 标记为 `cancelled`；
+- LangGraph 的 interrupt 节点不得包含副作用，因为恢复会从节点开头重新执行；
+- 升级时按 Run 保存的 `graph_version` 选择兼容图，不能让暂停中的旧 Run 跳入新版节点。
+
+M1 不承诺通用自动回滚。结构化文件补丁必须有备份并可恢复；包安装、任意 Shell 等
+动作只提供独立验证和人工补偿方案。
+
+### 上下文和执行预算
+
+- 单 Run 默认最长 60 分钟、最多 20 次模型循环和 30 个动作；
+- 单命令默认 60 秒、服务端硬上限 600 秒；
+- 单 Step 最多保存 64 KiB 输出，单 Run Artifact 合计最多 2 MiB；
+- draft 和审批默认 24 小时过期；
+- 256K 为默认上下文，1M 仅在 Provider 明确支持时可选；
+- 长日志始终外置为 Artifact，通过 Evidence 检索和分层摘要按需进入上下文；
+- 记录模型 usage、finish reason、耗时和截断原因，但不保存完整敏感 Prompt。
+
+### 规划接口
+
+以下接口在 M1 完成前均不可用：
+
+| 方法 | 路径 | 行为 |
+|---|---|---|
+| GET | `/ai/autonomy/status` | feature、Worker 和 checkpoint 就绪状态 |
+| POST | `/ai/autonomous-runs` | 创建并预检 draft |
+| POST | `/ai/autonomous-runs/{run_id}/start` | 锁定范围并异步启动 |
+| GET | `/ai/autonomous-runs` | 当前管理员的分页列表 |
+| GET | `/ai/autonomous-runs/{run_id}` | 权威快照、Step、结果和 `allowed_operations` |
+| GET | `/ai/autonomous-runs/{run_id}/stream?after_seq=` | 从指定 Event 序号续传 SSE |
+| POST | `/ai/autonomous-runs/{run_id}/steps/{step_id}/decision` | 对当前允许操作作出决定 |
+| POST | `/ai/autonomous-runs/{run_id}/cancel` | 请求取消 |
+| GET | `/ai/autonomous-runs/{run_id}/artifacts/{artifact_id}` | 获取所有者隔离的脱敏 Artifact |
+
+decision 请求只提交 `{operation, expected_revision}`，且 operation 必须来自服务端返回的
+`allowed_operations`。SSE 支持 `Last-Event-ID`；断线恢复先获取权威快照，再从
+`latest_event_seq` 续传。终态 Event 到达后，前端仍重新获取最终快照。
+
+## M1 工作包
+
+| WP | 内容 | 完成门 |
+|---|---|---|
+| WP0 | 兼容性与契约冻结：验证 LangGraph、Redis saver、Celery 与当前 Python；锁定依赖版本、状态和 API/SSE schema | interrupt/resume、Redis 重启和 Celery 投递 smoke 通过；不写业务功能 |
+| WP1 | MySQL 领域、四表、资产环境、状态转换、权限 Repository、迁移和 schema 同步 | 全新安装与升级结构一致；非法转换、越权和重复 Event 失败 |
+| WP2 | 专用 Redis 8、Celery、无副作用 Worker 入口、feature flag 和部署配置 | Worker 不启动 Web 或调度器；自治依赖停用不影响现有 AI |
+| WP3 | 结构化动作协议、三档策略、审批 digest、预算和纯函数测试 | 风险矩阵、Prompt 伪造、目标/凭据替换和 digest 篡改测试通过 |
+| WP4 | 可取消的结构化 SSH 原语、双流读取、退出码、超时、脱敏、Artifact 和审计 | 大输出不死锁；取消、超时和权限中途撤销准确；旧 SSH 接口不迁移 |
+| WP5 | LangGraph 固定图、Celery 推进、租约、幂等、恢复和 `needs_attention` | Fake Provider/Executor 下通过审批恢复、重复投递、强杀和 checkpoint 丢失 |
+| WP6 | REST/SSE 与真实 Linux 纵向闭环 | 刷新、断流、重复审批、跨用户访问和单机限制全部通过 |
+| WP7 | 独立工作台：列表、详情、时间线、Artifact 抽屉、审批、取消和恢复 UI | 桌面和窄屏验收；断线恢复状态模块有最小 Vitest |
+| WP8 | 聊天 draft 引用、执行后独立验证、故障注入、安全回归、文档和最终验收 | “已恢复/未恢复/无法确认”真实可证；完整本地测试通过 |
+
+依赖顺序：
+
+1. 路线图文档合并后只创建 WP0。
+2. WP0 完成后，WP1 和 WP2 可以并行。
+3. WP3～WP8 按顺序推进，避免多个实现同时修改核心状态机。
+4. 每个 WP 对应一个 Issue、一个 PR，并从已经合并的 `main` 创建分支。
+5. M2 以后不提前创建占位 Issue。
+
+每个 Issue 只需包含：目标、非目标、前置依赖、锁定的接口或状态、关键安全不变量、
+允许改动的模块、不得改动的模块、准确测试命令和隐私要求。后续实现不得自行改变
+MySQL/LangGraph/Redis/Celery 的职责、审批规则或恢复语义；需要改变时另开设计复核。
+
+## M1 最终验收
+
+每个 WP 运行相关后端或前端测试；WP8 在本地运行完整后端测试、前端类型检查、生产
+构建、新增的最小 Vitest 和 Compose 集成测试，不依赖远端 CI 额度。
+
+最终必须覆盖：
+
+- Web、Worker、Redis 分别重启后的自动恢复；
+- Worker 在只读动作、写动作开始前、写动作执行中和 checkpoint 写入前后被强杀；
+- 重复 Celery 投递、重复审批、过期租约和审批摘要篡改；
+- 权限、凭据授权或 `lab` 环境在运行中撤销；
+- 取消不虚报，未知写结果不自动重放；
+- Prompt 注入、ANSI 控制字符、超长输出、敏感字段和横向访问；
+- 自治功能关闭或基础设施不可用时，现有聊天、诊断和批量审批仍正常；
+- 调查故障、安装或修改、重启、独立验证并输出可引用证据的完整单机闭环；
+- 工作台桌面和窄屏视觉验收，测试机信息、凭据、截图和私有路径不进入 Git。
+
+## 设计参考
+
+这些项目和官方文档用于约束设计，不代表 OrangeServer 会直接引入完整产品：
+
+- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
+  和 [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts)：长任务 checkpoint、
+  暂停和恢复语义；
+- [LangGraph Redis saver](https://github.com/redis-developer/langgraph-redis)：Redis 8
+  checkpoint 的官方实现与模块要求；
+- [Celery](https://docs.celeryq.dev/en/stable/getting-started/introduction.html)：Worker、Broker
+  和至少一次任务投递；
+- [OpenHands](https://docs.openhands.dev/openhands/usage/architecture/runtime)：
+  Action/Observation、隔离执行和风险确认思路；
+- [HolmesGPT](https://github.com/HolmesGPT/holmesgpt)：只读/修复工具分层、Runbook 和多数据源调查；
+- [K8sGPT](https://github.com/k8sgpt-ai/k8sgpt)：确定性 Analyzer 先发现、模型后解释；
+- [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/)
+  和 [Loki HTTP API](https://grafana.com/docs/loki/latest/reference/loki-http-api/)：
+  受控指标与日志查询；
+- [Docker Engine security](https://docs.docker.com/engine/security/)
+  和 [Kubernetes RBAC good practices](https://kubernetes.io/docs/concepts/security/rbac-good-practices/)：
+  容器与集群最小权限边界。
