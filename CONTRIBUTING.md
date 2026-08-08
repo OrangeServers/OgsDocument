@@ -46,6 +46,34 @@ AI and automation changes require special care:
 - secrets must not enter logs, API responses, prompts, events, or fixtures;
 - planned APIs must not be documented as released.
 
+## Repository lineage and pre-disclosure work
+
+The public `origin/main` branch is the only canonical product baseline. Start
+every change from its latest revision:
+
+```bash
+git fetch origin main
+git switch -c <type>/<short-name> origin/main
+git merge-base --is-ancestor origin/main HEAD
+```
+
+An explicitly approved private staging remote may store an unpublished feature
+branch, but it is not a second product line and its default branch must never be
+merged into public work. When disclosure is approved, review and test the same
+branch, then push that branch to the public repository and open a pull request.
+Do not convert changes between unrelated public and private histories.
+
+Before the first public push:
+
+- inspect every commit and the full diff from `origin/main`;
+- verify that the branch still descends from public `origin/main`;
+- run the checks required by the change;
+- remove private infrastructure data and use reserved example addresses;
+- scan the complete branch range for secrets and sensitive history.
+
+If the ancestry check fails, create a clean branch from `origin/main` and port
+only reviewed changes. Do not solve it by merging unrelated histories.
+
 ## Local checks
 
 Run checks proportional to the change. For application code, the normal
@@ -86,6 +114,8 @@ documentation.
 
 ## Documentation style
 
+- Follow the ownership and release-state rules in the
+  [documentation writing guide](docs/WRITING.md).
 - English `README.md` is the concise international landing page.
 - `README.zh-CN.md` and `docs/` contain the detailed Chinese documentation.
 - [The upgrade guide](docs/operations/UPGRADE.md) is the only source for

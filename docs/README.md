@@ -28,6 +28,8 @@
 
 ## 开发者
 
+- [编码模型工作约定](../AGENTS.md)：开工检查、仓库血缘、安全边界、验证和交付格式。
+- [文档编写规范](WRITING.md)：入口职责、唯一事实源、内容状态和隐私规则。
 - [后端开发说明](../backend/README.md)
 - [前端开发说明](../frontend/README.md)
 - [AI REST/SSE 契约](ai/API.md)
