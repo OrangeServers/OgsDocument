@@ -115,6 +115,15 @@ class t_host(db.Model, TimestampMixin, SoftDeleteMixin):
         ),
         nullable=True,
     )
+    # M1/S1: AI 自治环境分级 production|staging|lab，默认 production。
+    #   只有管理员可以通过 /ai/autonomy/hosts/<id>/environment 修改；
+    #   名为 lab 的普通资产组不授予任何自治能力。
+    #   同步 DDL: ALTER TABLE t_host ADD COLUMN ai_environment VARCHAR(10)
+    #             NOT NULL DEFAULT 'production';
+    ai_environment = db.Column(
+        db.String(10), nullable=False,
+        default='production', server_default='production',
+    )
 
 
 class t_sys_user(db.Model, TimestampMixin, SoftDeleteMixin):
@@ -552,6 +561,108 @@ class t_ai_diagnostic_report(db.Model):
         db.BOOLEAN, nullable=False, default=False, server_default='0',
     )
     generated_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+
+
+class t_ai_autonomous_run(db.Model, TimestampMixin):
+    """M1/S1: 自治任务的权威快照。revision 随每次状态变化递增，
+    审批决策必须携带当前 revision；budget/目标/凭据引用创建后不可变。"""
+
+    __tablename__ = 't_ai_autonomous_run'
+    id = db.Column(db.String(32), primary_key=True)
+    owner = db.Column(db.String(24), nullable=False, index=True)
+    goal = db.Column(db.String(512), nullable=False)
+    host_id = db.Column(db.INTEGER, nullable=False, index=True)
+    host_alias = db.Column(db.String(25), nullable=False)
+    system_user_id = db.Column(db.INTEGER, nullable=False)
+    system_user_alias = db.Column(db.String(24), nullable=False)
+    mode = db.Column(db.String(16), nullable=False)
+    status = db.Column(db.String(20), nullable=False, index=True)
+    outcome = db.Column(db.String(16), nullable=True)
+    revision = db.Column(db.INTEGER, nullable=False, default=0)
+    budget_json = db.Column(db.Text, nullable=False)
+    latest_event_seq = db.Column(db.INTEGER, nullable=False, default=0)
+    cancel_requested = db.Column(
+        db.BOOLEAN, nullable=False, default=False, server_default='0',
+    )
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+
+class t_ai_autonomous_step(db.Model, TimestampMixin):
+    """M1/S1: 审批对象。action_json 是审批前落库的不可变动作快照，
+    action_digest 绑定该快照；审批通过后执行前必须复核一致。"""
+
+    __tablename__ = 't_ai_autonomous_step'
+    __table_args__ = (
+        db.UniqueConstraint('run_id', 'seq', name='uq_ai_autonomy_step_seq'),
+    )
+    id = db.Column(db.String(32), primary_key=True)
+    run_id = db.Column(
+        db.String(32),
+        db.ForeignKey('t_ai_autonomous_run.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    kind = db.Column(db.String(16), nullable=False)
+    status = db.Column(db.String(20), nullable=False, index=True)
+    seq = db.Column(db.INTEGER, nullable=False)
+    summary = db.Column(db.String(255), nullable=False)
+    action_json = db.Column(db.Text, nullable=True)
+    action_digest = db.Column(db.String(64), nullable=True)
+    note = db.Column(db.String(255), nullable=False, default='')
+
+
+class t_ai_autonomous_event(db.Model):
+    """M1/S1: Run 内单调递增的追加式事件。payload 永不包含凭据。"""
+
+    __tablename__ = 't_ai_autonomous_event'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'run_id', 'sequence', name='uq_ai_autonomy_event_sequence',
+        ),
+    )
+    # MySQL 落 BIGINT AUTO_INCREMENT（与 orange.sql/rev53 一致）；
+    # SQLite 测试引擎只自动递增 INTEGER 主键，退化为 INTEGER。
+    id = db.Column(
+        db.BIGINT().with_variant(db.Integer(), 'sqlite'),
+        primary_key=True, autoincrement=True,
+    )
+    run_id = db.Column(
+        db.String(32),
+        db.ForeignKey('t_ai_autonomous_run.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    sequence = db.Column(db.INTEGER, nullable=False)
+    event_type = db.Column(db.String(32), nullable=False)
+    payload_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
+
+
+class t_ai_autonomous_artifact(db.Model):
+    """M1/S1: 清洗、脱敏、限长后 Fernet 加密的执行产物引用。"""
+
+    __tablename__ = 't_ai_autonomous_artifact'
+    id = db.Column(db.String(32), primary_key=True)
+    run_id = db.Column(
+        db.String(32),
+        db.ForeignKey('t_ai_autonomous_run.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    step_id = db.Column(db.String(32), nullable=True)
+    kind = db.Column(db.String(32), nullable=False)
+    title = db.Column(db.String(128), nullable=False)
+    # MySQL 落 LONGTEXT（与 orange.sql/rev53 一致）；SQLite 测试引擎退化为 TEXT。
+    content_ciphertext = db.Column(
+        db.Text().with_variant(LONGTEXT(), 'mysql'), nullable=False,
+    )
+    size_bytes = db.Column(db.INTEGER, nullable=False, default=0)
+    truncated = db.Column(
+        db.BOOLEAN, nullable=False, default=False, server_default='0',
+    )
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
 
 

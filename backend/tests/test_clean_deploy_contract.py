@@ -294,6 +294,53 @@ def test_baseline_varchar_lengths_match_current_orm():
     assert mismatches == {}, f"orange.sql varchar length != ORM: {mismatches}"
 
 
+def test_rev53_autonomy_migration_matches_baseline_and_orm():
+    """M1/S1: rev53 升级迁移、orange.sql 基线与 ORM 三方列集合一致。"""
+    from app.core.db.database import db
+
+    rev53 = (
+        BACKEND / "mysqldir" / "rev53_ai_autonomy_baseline.sql"
+    ).read_text(encoding="utf-8")
+    schema = (BACKEND / "mysqldir" / "orange.sql").read_text(encoding="utf-8")
+
+    def columns(source, table):
+        match = re.search(
+            r"CREATE TABLE(?: IF NOT EXISTS)? `" + table
+            + r"` \((.*?)\)\s*ENGINE=",
+            source,
+            re.IGNORECASE | re.DOTALL,
+        )
+        assert match, f"{table} is missing from the schema source"
+        return set(
+            re.findall(r"^\s*`([^`]+)`\s+", match.group(1), re.MULTILINE)
+        )
+
+    tables = [
+        "t_ai_autonomous_run",
+        "t_ai_autonomous_step",
+        "t_ai_autonomous_event",
+        "t_ai_autonomous_artifact",
+    ]
+    for table in tables:
+        rev53_columns = columns(rev53, table)
+        baseline_columns = columns(schema, table)
+        orm_columns = set(db.metadata.tables[table].columns.keys())
+        assert rev53_columns == baseline_columns == orm_columns, table
+
+    assert (
+        "ADD COLUMN `ai_environment` VARCHAR(10) NOT NULL "
+        "DEFAULT ''production''"
+    ) in rev53
+    host_ddl = re.search(
+        r"CREATE TABLE `t_host` \((.*?)\)\s*ENGINE=", schema, re.DOTALL,
+    )
+    assert host_ddl, "orange.sql must define t_host"
+    assert (
+        "`ai_environment` varchar(10) NOT NULL DEFAULT 'production'"
+    ) in host_ddl.group(1)
+    assert "ai_environment" in db.metadata.tables["t_host"].columns
+
+
 def test_dockerfile_builds_from_committed_requirements_without_resolving_lock():
     dockerfile = (BACKEND / "Dockerfile").read_text(encoding="utf-8")
     assert "pip-compile" not in dockerfile
