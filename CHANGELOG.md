@@ -5,6 +5,17 @@ principles of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added
+
+- AI autonomy M1/S1 safety and approval baseline (disabled by default):
+  Run/Step/event/artifact domain model with a strict server-side state
+  machine, an administrator-managed asset environment column
+  (`t_host.ai_environment`, rev53), structured probe actions with budget,
+  policy, redaction, and approval-digest validation, and optimistic-revision
+  step decisions that re-check asset and credential authorization atomically.
+  Every autonomy endpoint stays rejected until `OGS_AI_AUTONOMY_ENABLED` is
+  explicitly set, and this stage performs no remote execution.
+
 ## [1.0.4] - 2026-07-30
 
 ### Fixed

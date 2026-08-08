@@ -243,6 +243,13 @@ AI_DIAGNOSTIC_REPORT_RETENTION_DAYS = max(
     min(3650, int(_env('OGS_AI_DIAGNOSTIC_REPORT_RETENTION_DAYS', '90'))),
 )
 
+# M1/S1: AI 自治安全与审批基线 feature flag。
+#   默认关闭；仅在显式设置 OGS_AI_AUTONOMY_ENABLED=1/true/yes/on 时启用。
+#   关闭时自治 API 全部返回 403，现有聊天、诊断和批量审批不受影响。
+AI_AUTONOMY_ENABLED = str(_env('OGS_AI_AUTONOMY_ENABLED', '')).strip().lower() in (
+    '1', 'true', 'yes', 'on',
+)
+
 # REVIEW-11-P1-1: SSH 危险命令黑名单
 #   拦截 rm -rf / / mkfs / dd if= / shutdown / reboot / fork 炸弹 等
 #   逗号分隔, 可通过 env 覆盖 (生产环境只追加,不删除默认项)
