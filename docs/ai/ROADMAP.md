@@ -216,27 +216,23 @@ decision 请求只提交 `{operation, expected_revision}`，且 operation 必须
 `allowed_operations`。SSE 支持 `Last-Event-ID`；断线恢复先获取权威快照，再从
 `latest_event_seq` 续传。终态 Event 到达后，前端仍重新获取最终快照。
 
-## M1 工作包
+## M1 稳定化工作包
 
 | WP | 内容 | 完成门 |
 |---|---|---|
-| WP0 | 兼容性与契约冻结：验证 LangGraph、Redis saver、Celery 与当前 Python；锁定依赖版本、状态和 API/SSE schema | interrupt/resume、Redis 重启和 Celery 投递 smoke 通过；不写业务功能 |
-| WP1 | MySQL 领域、四表、资产环境、状态转换、权限 Repository、迁移和 schema 同步 | 全新安装与升级结构一致；非法转换、越权和重复 Event 失败 |
-| WP2 | 专用 Redis 8、Celery、无副作用 Worker 入口、feature flag 和部署配置 | Worker 不启动 Web 或调度器；自治依赖停用不影响现有 AI |
-| WP3 | 结构化动作协议、三档策略、审批 digest、预算和纯函数测试 | 风险矩阵、Prompt 伪造、目标/凭据替换和 digest 篡改测试通过 |
-| WP4 | 可取消的结构化 SSH 原语、双流读取、退出码、超时、脱敏、Artifact 和审计 | 大输出不死锁；取消、超时和权限中途撤销准确；旧 SSH 接口不迁移 |
-| WP5 | LangGraph 固定图、Celery 推进、租约、幂等、恢复和 `needs_attention` | Fake Provider/Executor 下通过审批恢复、重复投递、强杀和 checkpoint 丢失 |
-| WP6 | REST/SSE 与真实 Linux 纵向闭环 | 刷新、断流、重复审批、跨用户访问和单机限制全部通过 |
-| WP7 | 独立工作台：列表、详情、时间线、Artifact 抽屉、审批、取消和恢复 UI | 桌面和窄屏验收；断线恢复状态模块有最小 Vitest |
-| WP8 | 聊天 draft 引用、执行后独立验证、故障注入、安全回归、文档和最终验收 | “已恢复/未恢复/无法确认”真实可证；完整本地测试通过 |
+| S1 安全与审批 | 领域表、资产环境、结构化动作、服务端只读探针、权限复核、不可变动作快照和 revision/digest 审批 | 全新安装/升级 schema 一致；伪装写入、越权、篡改、旧 revision 和重复审批失败 |
+| S2 执行与恢复 | 专用 Redis、Celery、LangGraph、数据库租约、checkpoint fail-closed、可取消 SSH、写意图和未知结果 | 真实 MySQL/Redis/Worker 下通过重复投递、强杀、取消和 checkpoint 丢失测试 |
+| S3 证据与产品闭环 | 脱敏 Evidence、独立 Verification、三态 Outcome、REST/SSE、工作台和聊天引用 | 隔离测试机完成调查、变更、重启、独立验证闭环；完整本地测试和视觉验收通过 |
 
 依赖顺序：
 
-1. 路线图文档合并后只创建 WP0。
-2. WP0 完成后，WP1 和 WP2 可以并行。
-3. WP3～WP8 按顺序推进，避免多个实现同时修改核心状态机。
-4. 每个 WP 对应一个 Issue、一个 PR，并从已经合并的 `main` 创建分支。
-5. M2 以后不提前创建占位 Issue。
+1. `integration/ai-autonomy-m1` 是短期公开集成分支，直接建立在最新公开 `main` 上；
+   feature flag 始终默认关闭，正式发布仍只能来自 `main`。
+2. S1、S2、S3 严格顺序推进。前一阶段完成门未通过时，不创建下一阶段 Issue。
+3. 每个阶段对应一个 Issue 和一个 PR；工作分支从当前 M1 集成分支创建，PR 也只合回
+   该集成分支，禁止顺带迁入其他功能或旧分支历史。
+4. S3 完成后，从集成分支向 `main` 创建最终完整 PR；验收通过并合并后删除集成分支。
+5. M2 以后不提前创建占位 Issue，也不建立永久 `develop` 分支。
 
 每个 Issue 只需包含：目标、非目标、前置依赖、锁定的接口或状态、关键安全不变量、
 允许改动的模块、不得改动的模块、准确测试命令和隐私要求。后续实现不得自行改变
